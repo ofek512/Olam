@@ -151,16 +151,46 @@ namespace olam
                                         100.0 * static_cast<double>(prime) / landCount));
         }
 
+        const auto &vegetation = world.geography().vegetation;
+        if (!vegetation.empty())
+        {
+            std::size_t land = 0;
+            std::size_t forest = 0;
+            std::uint64_t cover = 0;
+            for (std::size_t i = 0; i < vegetation.size(); ++i)
+            {
+                if (vegetation[i] == VegetationType::None)
+                    continue;
+                ++land;
+                cover += world.geography().treeCover[i];
+                const VegetationType kind = vegetation[i];
+                forest += kind == VegetationType::LightForest || kind == VegetationType::Forest ||
+                                  kind == VegetationType::DenseForest
+                              ? 1u
+                              : 0u;
+            }
+            const double landCount = static_cast<double>(std::max<std::size_t>(land, 1));
+            lines.push_back(std::format("Forested land {:.1f} %   mean tree cover {:.0f} %",
+                                        100.0 * static_cast<double>(forest) / landCount,
+                                        static_cast<double>(cover) / landCount));
+        }
+
         const ResourceData &resources = world.resources();
         if (!resources.depositId.empty())
         {
             std::size_t counts[static_cast<std::size_t>(MineralType::Count)] = {};
             for (const Deposit &deposit : resources.deposits)
                 ++counts[static_cast<std::size_t>(deposit.mineral)];
-            std::string line = std::format("Deposits {}  ", resources.deposits.size());
+            // Two lines keep the stats panel narrow.
+            std::string metals = std::format("Deposits {}  ", resources.deposits.size());
+            std::string others = "        ";
             for (std::size_t m = 0; m < static_cast<std::size_t>(MineralType::Count); ++m)
+            {
+                std::string &line = m < static_cast<std::size_t>(MineralType::Stone) ? metals : others;
                 line += std::format(" {} {}", toString(static_cast<MineralType>(m)), counts[m]);
-            lines.push_back(line);
+            }
+            lines.push_back(metals);
+            lines.push_back(others);
         }
         return lines;
     }

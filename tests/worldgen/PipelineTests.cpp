@@ -2,8 +2,12 @@
 #include "worldgen/WorldGenTestUtil.h"
 
 #include "world/WorldHash.h"
+#include "world/WorldStats.h"
 
 #include <algorithm>
+#include <string>
+#include <string_view>
+#include <vector>
 
 using namespace olam;
 
@@ -26,6 +30,22 @@ OLAM_TEST(pipeline_settings_change_world)
     config.generation.elevation.landFraction = 0.6f;
     const auto b = test::generateWorld(7, config);
     OLAM_CHECK(a && b && hashWorld(*a).combined != hashWorld(*b).combined);
+}
+
+OLAM_TEST(stats_cover_every_pass)
+{
+    const auto world = test::generateWorld(3);
+    OLAM_CHECK(world != nullptr);
+    if (!world)
+        return;
+    const std::vector<std::string> lines = describeWorldStats(*world);
+    for (const std::string_view prefix : {"Seed", "Map", "Above sea level", "Land ", "Land rain", "Rivers", "Lakes",
+                                          "Biomes", "Fertility", "Forested land", "Deposits"})
+    {
+        const bool found = std::any_of(lines.begin(), lines.end(), [&](const std::string &line)
+                                       { return line.starts_with(prefix); });
+        OLAM_CHECK(found);
+    }
 }
 
 OLAM_TEST(tectonics_invariants)
