@@ -61,6 +61,8 @@ add_library(olam_core STATIC
     src/core/files/FileSystem.cpp
     src/core/debug/Assert.cpp
     src/core/hash/XxHash64.cpp
+    src/core/random/Pcg32.cpp
+    src/core/random/Seed.cpp
     src/render/camera/Camera2D.cpp
 )
 target_include_directories(olam_core PUBLIC src)

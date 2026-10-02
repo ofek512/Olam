@@ -12,6 +12,7 @@ olam_add_test_executable(olam_core_tests
     core/FilesTests.cpp
     core/LayerTests.cpp
     core/HashTests.cpp
+    core/RandomTests.cpp
     render/CameraTests.cpp
 )
 target_link_libraries(olam_core_tests PRIVATE olam_core)
