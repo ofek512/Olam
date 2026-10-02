@@ -198,6 +198,23 @@ namespace olam
             {32.0f, {190, 30, 30}},
         }};
 
+        constexpr std::array<ColorStop, 6> kRainfallRamp = {{
+            {0.0f, {200, 170, 120}},
+            {250.0f, {230, 220, 140}},
+            {500.0f, {170, 210, 120}},
+            {1000.0f, {90, 170, 90}},
+            {2000.0f, {40, 120, 170}},
+            {3500.0f, {30, 50, 140}},
+        }};
+
+        constexpr std::array<ColorStop, 5> kMoistureRamp = {{
+            {0.0f, {170, 110, 60}},
+            {26.0f, {220, 190, 110}},
+            {64.0f, {200, 220, 120}},
+            {128.0f, {80, 170, 80}},
+            {255.0f, {30, 90, 150}},
+        }};
+
     } // namespace
 
     const WorldViewInfo &viewInfo(WorldView view)
@@ -220,6 +237,10 @@ namespace olam
             return !world.hydrology().distanceToOceanKm.empty();
         case WorldView::Temperature:
             return !world.climate().meanAnnualTemperature.empty();
+        case WorldView::Rainfall:
+            return !world.climate().annualRainfall.empty();
+        case WorldView::Moisture:
+            return !world.climate().moisture.empty();
         case WorldView::HashDebug:
             return true;
         default:
@@ -264,14 +285,29 @@ namespace olam
         case WorldView::DistanceToOcean:
         {
             const auto &distance = world.hydrology().distanceToOceanKm;
-            colorizeRamp(world, kDistanceRamp, [&](std::size_t i) { return static_cast<float>(distance[i]); }, rgba);
+            colorizeRamp(world, kDistanceRamp, [&](std::size_t i)
+                         { return static_cast<float>(distance[i]); }, rgba);
             break;
         }
         case WorldView::Temperature:
         {
             const auto &temperature = world.climate().meanAnnualTemperature;
-            colorizeRamp(world, kTemperatureRamp, [&](std::size_t i) { return static_cast<float>(temperature[i]) / 10.0f; },
-                         rgba, 0.35f);
+            colorizeRamp(world, kTemperatureRamp, [&](std::size_t i)
+                         { return static_cast<float>(temperature[i]) / 10.0f; }, rgba, 0.35f);
+            break;
+        }
+        case WorldView::Rainfall:
+        {
+            const auto &rainfall = world.climate().annualRainfall;
+            colorizeRamp(world, kRainfallRamp, [&](std::size_t i)
+                         { return static_cast<float>(rainfall[i]); }, rgba, 0.5f);
+            break;
+        }
+        case WorldView::Moisture:
+        {
+            const auto &moisture = world.climate().moisture;
+            colorizeRamp(world, kMoistureRamp, [&](std::size_t i)
+                         { return static_cast<float>(moisture[i]); }, rgba);
             break;
         }
         case WorldView::HashDebug:

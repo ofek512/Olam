@@ -55,6 +55,26 @@ namespace olam
         float noiseWavelengthKm = 800.0f;
     };
 
+    struct RainfallSettings
+    {
+        // Fraction of the moisture deficit picked up per 100 km over open water.
+        float oceanEvaporationPer100Km = 0.25f;
+        // Fraction of carried moisture rained out per km over land and over sea.
+        float landRainPerKm = 0.004f;
+        float seaRainPerKm = 0.003f;
+        // Share of land rainfall returned to the air (evapotranspiration), keeping interiors moist.
+        float recycling = 0.65f;
+        // Rising this many metres along the wind rains out (almost) all carried moisture.
+        float orographicRiseM = 2000.0f;
+        // Moisture of air entering over a land map edge, relative to capacity.
+        float edgeInflow = 0.6f;
+        // Converts rain intensity (moisture units per km) to mm per year.
+        float mmScale = 250000.0f;
+        float noiseAmplitude = 0.25f;
+        float noiseWavelengthKm = 600.0f;
+        float blurKm = 40.0f;
+    };
+
     // Tuning values for every generation pass. Part of WorldConfig, so they are validated, hashed and saved.
     // Each pass adds its own group when it is implemented.
     struct WorldGenSettings
@@ -63,6 +83,7 @@ namespace olam
         ElevationSettings elevation;
         OceanSettings ocean;
         TemperatureSettings temperature;
+        RainfallSettings rainfall;
     };
 
     // Calls visit(field) for every setting in a fixed order (hashing, saving, loading).
@@ -98,6 +119,18 @@ namespace olam
         visit(temperature.continentalCooling);
         visit(temperature.noiseAmplitude);
         visit(temperature.noiseWavelengthKm);
+
+        auto &rain = settings.rainfall;
+        visit(rain.oceanEvaporationPer100Km);
+        visit(rain.landRainPerKm);
+        visit(rain.seaRainPerKm);
+        visit(rain.recycling);
+        visit(rain.orographicRiseM);
+        visit(rain.edgeInflow);
+        visit(rain.mmScale);
+        visit(rain.noiseAmplitude);
+        visit(rain.noiseWavelengthKm);
+        visit(rain.blurKm);
     }
 
     std::optional<std::string> validateGenerationSettings(const WorldGenSettings &settings);

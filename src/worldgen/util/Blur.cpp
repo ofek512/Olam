@@ -13,7 +13,8 @@ namespace olam
         void blurLine(const float *src, float *dst, std::size_t first, std::size_t stride, int count, int radius)
         {
             const double window = 2.0 * radius + 1.0;
-            auto at = [&](int i) { return static_cast<double>(src[first + static_cast<std::size_t>(std::clamp(i, 0, count - 1)) * stride]); };
+            auto at = [&](int i)
+            { return static_cast<double>(src[first + static_cast<std::size_t>(std::clamp(i, 0, count - 1)) * stride]); };
 
             double sum = 0.0;
             for (int i = -radius; i <= radius; ++i)

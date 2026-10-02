@@ -177,7 +177,8 @@ namespace olam
         }
 
         // Smooths the per-plate step functions into continuous fields (no seams at triple junctions).
-        const auto tilesFor = [tileKm](float km) { return std::max(1, static_cast<int>(km / tileKm * 0.5f)); };
+        const auto tilesFor = [tileKm](float km)
+        { return std::max(1, static_cast<int>(km / tileKm * 0.5f)); };
         boxBlur(base, tilesFor(settings.boundaryBlendKm), 3);
         boxBlur(uplift, tilesFor(settings.mountainWidthKm * 0.25f), 2);
         boxBlur(rift, tilesFor(settings.riftWidthKm * 0.25f), 2);

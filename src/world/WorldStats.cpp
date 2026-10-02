@@ -49,6 +49,30 @@ namespace olam
                                         percent(SurfaceWater::Land), percent(SurfaceWater::Ocean),
                                         percent(SurfaceWater::Lake), farthest));
         }
+
+        const auto &rainfall = world.climate().annualRainfall;
+        if (!rainfall.empty() && !water.empty())
+        {
+            const auto &moisture = world.climate().moisture;
+            std::uint64_t landRain = 0;
+            std::size_t landTiles = 0;
+            std::size_t aridTiles = 0;
+            std::uint16_t wettest = 0;
+            for (std::size_t i = 0; i < rainfall.size(); ++i)
+            {
+                wettest = std::max(wettest, rainfall[i]);
+                if (water[i] != SurfaceWater::Land)
+                    continue;
+                ++landTiles;
+                landRain += rainfall[i];
+                // Aridity index below 0.2 (255 = 2.0).
+                aridTiles += moisture[i] < 26 ? 1u : 0u;
+            }
+            const double landCount = static_cast<double>(std::max<std::size_t>(landTiles, 1));
+            lines.push_back(std::format("Land rain mean {:.0f} mm   arid land {:.1f} %   wettest {} mm",
+                                        static_cast<double>(landRain) / landCount,
+                                        100.0 * static_cast<double>(aridTiles) / landCount, wettest));
+        }
         return lines;
     }
 

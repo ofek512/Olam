@@ -21,6 +21,10 @@ namespace olam
     {
         // Tenths of a degree Celsius (183 = 18.3 C); annual mean, not an instantaneous value.
         Layer<std::int16_t> meanAnnualTemperature;
+        // Millimetres per year.
+        Layer<std::uint16_t> annualRainfall;
+        // Aridity index (rainfall / potential evaporation) scaled so 255 = 2.0 or wetter.
+        Layer<std::uint8_t> moisture;
     };
 
     struct HydrologyData

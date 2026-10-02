@@ -25,9 +25,9 @@ Short status checklist. Full vision and rationale: [agent.MD](../agent.MD).
 
 - [x] Infrastructure: noise, math helpers, generation settings, layer descriptors, view framework
 - [x] 3A Tectonics + elevation (plates, rock type)
-- [ ] 3B Ocean (+ distance to ocean)
-- [ ] 3C Temperature
-- [ ] 3D Rainfall / moisture
+- [x] 3B Ocean (+ distance to ocean)
+- [x] 3C Temperature
+- [x] 3D Rainfall / moisture
 - [ ] 3E Hydrology (rivers, lakes)
 - [ ] Soil
 - [ ] 3F Biomes

@@ -67,6 +67,12 @@ namespace olam
         if (!(settings.temperature.lapseRatePerKm >= 0.0f && settings.temperature.continentalCooling >= 0.0f &&
               settings.temperature.noiseAmplitude >= 0.0f && settings.temperature.noiseWavelengthKm > 0.0f))
             return "temperature settings out of range";
+        const auto &rain = settings.rainfall;
+        if (!(rain.oceanEvaporationPer100Km > 0.0f && rain.landRainPerKm > 0.0f && rain.seaRainPerKm > 0.0f &&
+              rain.recycling >= 0.0f && rain.recycling < 1.0f && rain.orographicRiseM > 0.0f && rain.edgeInflow >= 0.0f &&
+              rain.mmScale > 0.0f && rain.noiseAmplitude >= 0.0f && rain.noiseAmplitude < 1.0f &&
+              rain.noiseWavelengthKm > 0.0f && rain.blurKm >= 0.0f))
+            return "rainfall settings out of range";
         return std::nullopt;
     }
 

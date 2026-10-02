@@ -20,6 +20,8 @@ namespace olam
         SurfaceWater,
         DistanceToOcean,
         Temperature,
+        Rainfall,
+        Moisture,
         Count,
     };
 
@@ -56,6 +58,12 @@ namespace olam
             break;
         case LayerId::Temperature:
             f(world.climate().meanAnnualTemperature);
+            break;
+        case LayerId::Rainfall:
+            f(world.climate().annualRainfall);
+            break;
+        case LayerId::Moisture:
+            f(world.climate().moisture);
             break;
         case LayerId::Count:
             break;

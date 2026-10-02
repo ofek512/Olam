@@ -16,6 +16,8 @@ namespace olam
             {LayerId::SurfaceWater, "Water", ""},
             {LayerId::DistanceToOcean, "To ocean", "km"},
             {LayerId::Temperature, "Temperature", "C"},
+            {LayerId::Rainfall, "Rainfall", "mm/yr"},
+            {LayerId::Moisture, "Moisture", ""},
         };
 
     } // namespace
@@ -49,6 +51,18 @@ namespace olam
             return std::format("{} km", world.hydrology().distanceToOceanKm[index]);
         case LayerId::Temperature:
             return std::format("{:.1f} C", world.climate().meanAnnualTemperature[index] / 10.0);
+        case LayerId::Rainfall:
+            return std::format("{} mm/yr", world.climate().annualRainfall[index]);
+        case LayerId::Moisture:
+        {
+            const double aridity = world.climate().moisture[index] / 255.0 * 2.0;
+            const char *label = aridity < 0.05   ? "hyper-arid"
+                                : aridity < 0.2  ? "arid"
+                                : aridity < 0.5  ? "semi-arid"
+                                : aridity < 0.65 ? "dry sub-humid"
+                                                 : "humid";
+            return std::format("AI {:.2f} ({})", aridity, label);
+        }
         case LayerId::Count:
             break;
         }

@@ -41,7 +41,8 @@ namespace olam
             }
         }
 
-        auto relax = [&](int x, int y, int sign) {
+        auto relax = [&](int x, int y, int sign)
+        {
             const std::size_t i = distance.index(x, y);
             for (const Offset &offset : kForward)
             {
