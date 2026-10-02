@@ -22,3 +22,8 @@ olam_add_test_executable(olam_world_tests
     world/WorldTests.cpp
 )
 target_link_libraries(olam_world_tests PRIVATE olam_world)
+
+olam_add_test_executable(olam_worldgen_tests
+    worldgen/WorldGeneratorTests.cpp
+)
+target_link_libraries(olam_worldgen_tests PRIVATE olam_worldgen)

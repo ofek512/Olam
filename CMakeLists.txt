@@ -87,6 +87,18 @@ target_link_libraries(olam_world
 )
 
 # ---------------------------------------------------------------------------
+# olam_worldgen: generation pipeline.
+# ---------------------------------------------------------------------------
+add_library(olam_worldgen STATIC
+    src/worldgen/WorldGenContext.cpp
+    src/worldgen/WorldGenerator.cpp
+)
+target_link_libraries(olam_worldgen
+    PUBLIC olam_world
+    PRIVATE olam_warnings
+)
+
+# ---------------------------------------------------------------------------
 # SDL-dependent targets
 # ---------------------------------------------------------------------------
 if(OLAM_BUILD_ENGINE)
