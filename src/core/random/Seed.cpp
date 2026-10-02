@@ -3,6 +3,7 @@
 #include "core/hash/XxHash64.h"
 
 #include <charconv>
+#include <system_error>
 
 namespace olam
 {
