@@ -104,8 +104,11 @@ namespace olam
             return "vegetation settings out of range";
         const auto &resources = settings.resources;
         if (!(resources.densityScale >= 0.0f && resources.densityScale <= 100.0f && resources.minSpacingKm >= 0.0f &&
-              resources.provinceWavelengthKm > 0.0f && resources.minDepositTiles >= 1 &&
-              resources.maxDepositTiles >= resources.minDepositTiles && resources.maxDepositTiles <= 1000))
+              resources.provinceWavelengthKm > 0.0f && resources.veinsPerMillionKm2 >= 0.0f && resources.placerMaxKm >= 0.0f &&
+              resources.placerSpacingKm > 0.0f && resources.coalPerMillionKm2 >= 0.0f &&
+              resources.ironstonePerMillionKm2 >= 0.0f && resources.bandedIronPerMillionKm2 >= 0.0f &&
+              resources.rockSaltPerMillionKm2 >= 0.0f && resources.saltPansPerMillionKm2 >= 0.0f &&
+              resources.bogIronPerMillionKm2 >= 0.0f))
             return "resource settings out of range";
         return std::nullopt;
     }

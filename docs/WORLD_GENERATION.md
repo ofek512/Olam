@@ -190,14 +190,24 @@ other intermediate layers.
 
 ### Resources
 
-- Minerals (iron, copper, tin, coal, gold, silver, stone, clay, salt): a probability field per mineral
-  (geology × terrain × regional noise) is sampled with PCG and minimum spacing into `Deposit` clusters with a
-  richness. Wood, game and fish are derived from existing layers. Per mineral: a rock-type × terrain-class table
-  (plus clay soils for clay, aridity for salt) times a province noise field; PCG (seed per mineral) draws
-  candidate tiles accepted with that probability, same-mineral deposits keep a minimum spacing, and each accepted
-  centre grows into a 3-12 tile cluster over similarly suitable land. Base densities (per million km² of land):
-  iron 40, copper 25, tin 8, coal 30, gold 8, silver 10, stone 60, clay 50, salt 15. Yields:
-  `world/queries/ResourceQueries`.
+- Minerals: iron, copper, tin, coal, gold, silver, salt. Each `Deposit` records its `DepositOrigin`; deposits are
+  placed where that process happens, not by current terrain alone (ores are not confined to mountains):
+  - **Vein** (hydrothermal): potential by province (ancient and active orogens 1, shield 0.5, rift 0.3, basin
+    0.03 because bedrock is buried) x exposure (hills best, plains 0.6) x ore-district noise; the metal mix
+    depends on the province (active: copper/gold/silver; ancient: silver/tin/copper, e.g. Bohemia, Erzgebirge,
+    Cornwall; shield: gold/iron), tin x3 on granite.
+  - **Placer**: gold / tin downstream of veins in river beds (every >= 25 km, up to 150 km, max 3 per vein).
+  - **Bedded**: coal measures and ironstone in sedimentary basins (basin noise), banded iron in shields;
+    independent of today's climate.
+  - **Evaporite**: rock salt / brine springs in basins and folded into young belts (Wieliczka, Hallstatt).
+  - **Salt pan**: warm (>= 12 °C), drier, low coasts and desert playas.
+  - **Bog** iron: cool wetlands, peat, lake shores; many small low-grade deposits.
+- PCG per origin, minimum spacing per (mineral, origin), clusters grow over similarly suitable land.
+  Densities live in `ResourceSettings`. Calibrated on 64 km blocks (a settlement's surroundings): on 2048²
+  worlds ~60-70 % of land blocks have iron, ~30-38 % another metal, ~23-27 % coal, ~20-35 % salt. No fairness
+  guarantee; scarcity drives trade, and settlement placement prefers resource-rich spots.
+- Stone and clay are not deposits: `localMaterialsAt` derives building stone (rock type, terrain, soil) and clay
+  (soil) almost everywhere. Wood, game and fish yields are derived too (`world/queries/ResourceQueries`).
 
 ## Statistics, saving and tests
 

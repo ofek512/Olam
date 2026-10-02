@@ -203,21 +203,83 @@ namespace olam
         const ResourceData &resources = world.resources();
         if (!resources.depositId.empty())
         {
-            std::size_t counts[static_cast<std::size_t>(MineralType::Count)] = {};
+            std::size_t minerals[static_cast<std::size_t>(MineralType::Count)] = {};
+            std::size_t origins[static_cast<std::size_t>(DepositOrigin::Count)] = {};
             for (const Deposit &deposit : resources.deposits)
-                ++counts[static_cast<std::size_t>(deposit.mineral)];
-            // Two lines keep the stats panel narrow.
-            std::string metals = std::format("Deposits {}  ", resources.deposits.size());
-            std::string others = "        ";
-            for (std::size_t m = 0; m < static_cast<std::size_t>(MineralType::Count); ++m)
             {
-                std::string &line = m < static_cast<std::size_t>(MineralType::Stone) ? metals : others;
-                line += std::format(" {} {}", toString(static_cast<MineralType>(m)), counts[m]);
+                ++minerals[static_cast<std::size_t>(deposit.mineral)];
+                ++origins[static_cast<std::size_t>(deposit.origin)];
             }
-            lines.push_back(metals);
-            lines.push_back(others);
+            std::string byMineral = std::format("Deposits {}  ", resources.deposits.size());
+            for (std::size_t m = 0; m < static_cast<std::size_t>(MineralType::Count); ++m)
+                byMineral += std::format(" {} {}", toString(static_cast<MineralType>(m)), minerals[m]);
+            std::string byOrigin = "        ";
+            for (std::size_t o = 0; o < static_cast<std::size_t>(DepositOrigin::Count); ++o)
+                byOrigin += std::format(" {} {}", toString(static_cast<DepositOrigin>(o)), origins[o]);
+            lines.push_back(byMineral);
+            lines.push_back(byOrigin);
+
+            const DepositCoverage coverage = depositCoverage(world, 64.0);
+            std::string covered = std::format("64 km blocks with:");
+            for (std::size_t m = 0; m < static_cast<std::size_t>(MineralType::Count); ++m)
+                covered += std::format(" {} {:.0f}%", toString(static_cast<MineralType>(m)), coverage.mineral[m] * 100.0);
+            covered += std::format("  other metal {:.0f}%", coverage.nonIronMetal * 100.0);
+            lines.push_back(covered);
         }
         return lines;
+    }
+
+    DepositCoverage depositCoverage(const World &world, double blockKm)
+    {
+        DepositCoverage result;
+        const ResourceData &resources = world.resources();
+        const auto &water = world.hydrology().surfaceWater;
+        if (resources.depositId.empty() || water.empty())
+            return result;
+
+        const int blockTiles = std::max(1, static_cast<int>(std::floor(blockKm * 1000.0 / world.config().tileSizeMeters + 0.5)));
+        const int blocksX = (world.width() + blockTiles - 1) / blockTiles;
+        const int blocksY = (world.height() + blockTiles - 1) / blockTiles;
+        const auto blockCount = static_cast<std::size_t>(blocksX) * static_cast<std::size_t>(blocksY);
+        std::vector<std::uint32_t> land(blockCount, 0);
+        std::vector<std::uint32_t> tiles(blockCount, 0);
+        std::vector<std::uint8_t> present(blockCount, 0);
+        for (int y = 0; y < world.height(); ++y)
+        {
+            for (int x = 0; x < world.width(); ++x)
+            {
+                const std::size_t block = static_cast<std::size_t>(y / blockTiles) * static_cast<std::size_t>(blocksX) +
+                                          static_cast<std::size_t>(x / blockTiles);
+                const std::size_t i = world.index({x, y});
+                ++tiles[block];
+                land[block] += water[i] == SurfaceWater::Land ? 1u : 0u;
+                const DepositId id = resources.depositId[i];
+                if (id.isValid())
+                    present[block] |= static_cast<std::uint8_t>(1u << static_cast<unsigned>(resources.deposits[id.index()].mineral));
+            }
+        }
+
+        // Only mostly-land blocks count: a settlement area is mainly land.
+        constexpr std::uint8_t kOtherMetals = (1u << static_cast<unsigned>(MineralType::Copper)) |
+                                              (1u << static_cast<unsigned>(MineralType::Tin)) |
+                                              (1u << static_cast<unsigned>(MineralType::Gold)) |
+                                              (1u << static_cast<unsigned>(MineralType::Silver));
+        std::size_t counts[static_cast<std::size_t>(MineralType::Count)] = {};
+        std::size_t otherMetal = 0;
+        for (std::size_t b = 0; b < blockCount; ++b)
+        {
+            if (land[b] * 2 < tiles[b])
+                continue;
+            ++result.blocks;
+            for (std::size_t m = 0; m < static_cast<std::size_t>(MineralType::Count); ++m)
+                counts[m] += (present[b] >> m) & 1u;
+            otherMetal += (present[b] & kOtherMetals) != 0 ? 1u : 0u;
+        }
+        const double blocks = static_cast<double>(std::max<std::size_t>(result.blocks, 1));
+        for (std::size_t m = 0; m < static_cast<std::size_t>(MineralType::Count); ++m)
+            result.mineral[m] = static_cast<double>(counts[m]) / blocks;
+        result.nonIronMetal = static_cast<double>(otherMetal) / blocks;
+        return result;
     }
 
 } // namespace olam

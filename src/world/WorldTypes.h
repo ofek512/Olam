@@ -142,12 +142,30 @@ namespace olam
         Coal,
         Gold,
         Silver,
-        Stone,
-        Clay,
         Salt,
         Count,
     };
 
     std::string_view toString(MineralType mineral);
+
+    // How a deposit formed; decides where it can occur.
+    enum class DepositOrigin : std::uint8_t
+    {
+        // Hydrothermal veins in orogens, shields and granite massifs.
+        Vein,
+        // Gold / tin washed down rivers from veins.
+        Placer,
+        // Bog iron in cool wetlands and lake shores.
+        Bog,
+        // Layered sedimentary beds: coal, ironstone, banded iron.
+        Bedded,
+        // Rock salt and brine springs from ancient seas.
+        Evaporite,
+        // Coastal salt pans and desert playas.
+        SaltPan,
+        Count,
+    };
+
+    std::string_view toString(DepositOrigin origin);
 
 } // namespace olam

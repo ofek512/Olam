@@ -150,7 +150,8 @@ namespace olam
             {
                 Deposit &deposit = resources.deposits[d];
                 if (!reader.read(deposit.id) || deposit.id != DepositId::fromIndex(d) || !reader.read(deposit.mineral) ||
-                    deposit.mineral >= MineralType::Count || !readCoord(reader, deposit.center) ||
+                    deposit.mineral >= MineralType::Count || !reader.read(deposit.origin) ||
+                    deposit.origin >= DepositOrigin::Count || !readCoord(reader, deposit.center) ||
                     !world.isValid(deposit.center) || !reader.read(deposit.tileCount) || !reader.read(deposit.richness))
                     return std::format("invalid deposit {}", d + 1);
             }
@@ -202,6 +203,7 @@ namespace olam
         {
             writer.write(deposit.id);
             writer.write(deposit.mineral);
+            writer.write(deposit.origin);
             writeCoord(writer, deposit.center);
             writer.write(deposit.tileCount);
             writer.write(deposit.richness);

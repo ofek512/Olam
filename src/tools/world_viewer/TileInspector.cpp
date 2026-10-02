@@ -59,6 +59,9 @@ namespace olam
             const BiologicalYields yields = biologicalYieldsAt(world, coord);
             lines.push_back(std::format("Yields: wood {:.0f}  game {:.0f}  fish {:.0f} %", yields.wood * 100.0f,
                                         yields.game * 100.0f, yields.fish * 100.0f));
+            const LocalMaterials materials = localMaterialsAt(world, coord);
+            lines.push_back(
+                std::format("Materials: stone {:.0f}  clay {:.0f} %", materials.stone * 100.0f, materials.clay * 100.0f));
         }
 
         if (options.showDebugHash)

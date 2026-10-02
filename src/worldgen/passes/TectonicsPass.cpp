@@ -228,9 +228,9 @@ namespace olam
         constexpr float kContinentalCrust = 0.42f;
         constexpr float kAncientOrogen = 0.3f;
         noise::FractalSampler massifNoise(deriveSeed(seed, olam::seedId("MASSIF")),
-                                          {3, 1.0f / settings.ancientMassifWavelengthKm, 2.0f, 0.5f});
+                                          {2, 1.0f / settings.ancientMassifWavelengthKm, 2.0f, 0.5f});
         noise::FractalSampler graniteNoise(deriveSeed(seed, olam::seedId("GRANITE")),
-                                           {3, 1.0f / settings.graniteWavelengthKm, 2.0f, 0.5f});
+                                           {2, 1.0f / settings.graniteWavelengthKm, 2.0f, 0.5f});
         for (int y = 0; y < height; ++y)
         {
             for (int x = 0; x < width; ++x)

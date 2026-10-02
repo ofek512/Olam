@@ -99,6 +99,7 @@ namespace olam
     {
         DepositId id;
         MineralType mineral = MineralType::Iron;
+        DepositOrigin origin = DepositOrigin::Vein;
         WorldCoord center;
         std::uint32_t tileCount = 0;
         // 1..100 %.

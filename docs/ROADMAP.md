@@ -37,6 +37,8 @@ Short status checklist. Full vision and rationale: [agent.MD](../agent.MD).
 - [x] Debug views, tile inspector with real data, generation statistics
 - [x] Save / load generated world
 - [x] Golden hashes, performance check (2048² ≤ ~3 s Release)
+- [x] 3J Geology & ore genesis: ancient orogens, geological provinces, deposit origins (veins, placers, bedded,
+      evaporites, salt pans, bog iron), local stone / clay, natural map colours
 
 ## Phase 4 — Civilization foundations (= Milestone 2)
 

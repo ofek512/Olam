@@ -153,14 +153,22 @@ namespace olam
 
     struct ResourceSettings
     {
-        // Multiplies every mineral's base deposit density (deposits per million km^2 of land).
+        // Multiplies every deposit density below (deposits per million km^2 of land).
         float densityScale = 1.0f;
-        // Minimum distance between two deposits of the same mineral.
+        // Minimum distance between two deposits of the same mineral and origin.
         float minSpacingKm = 40.0f;
-        // Size of mineral provinces (regional noise).
+        // Size of ore districts (regional noise clustering veins).
         float provinceWavelengthKm = 300.0f;
-        std::int32_t minDepositTiles = 3;
-        std::int32_t maxDepositTiles = 12;
+        float veinsPerMillionKm2 = 160.0f;
+        // Placers form along rivers up to this far downstream of gold / tin veins, this far apart.
+        float placerMaxKm = 150.0f;
+        float placerSpacingKm = 25.0f;
+        float coalPerMillionKm2 = 80.0f;
+        float ironstonePerMillionKm2 = 140.0f;
+        float bandedIronPerMillionKm2 = 10.0f;
+        float rockSaltPerMillionKm2 = 80.0f;
+        float saltPansPerMillionKm2 = 50.0f;
+        float bogIronPerMillionKm2 = 120.0f;
     };
 
     // Tuning values for every generation pass. Part of WorldConfig, so they are validated, hashed and saved.
@@ -278,8 +286,15 @@ namespace olam
         visit(resources.densityScale);
         visit(resources.minSpacingKm);
         visit(resources.provinceWavelengthKm);
-        visit(resources.minDepositTiles);
-        visit(resources.maxDepositTiles);
+        visit(resources.veinsPerMillionKm2);
+        visit(resources.placerMaxKm);
+        visit(resources.placerSpacingKm);
+        visit(resources.coalPerMillionKm2);
+        visit(resources.ironstonePerMillionKm2);
+        visit(resources.bandedIronPerMillionKm2);
+        visit(resources.rockSaltPerMillionKm2);
+        visit(resources.saltPansPerMillionKm2);
+        visit(resources.bogIronPerMillionKm2);
     }
 
     std::optional<std::string> validateGenerationSettings(const WorldGenSettings &settings);

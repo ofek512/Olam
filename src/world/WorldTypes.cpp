@@ -203,13 +203,31 @@ namespace olam
             return "Gold";
         case MineralType::Silver:
             return "Silver";
-        case MineralType::Stone:
-            return "Stone";
-        case MineralType::Clay:
-            return "Clay";
         case MineralType::Salt:
             return "Salt";
         case MineralType::Count:
+            break;
+        }
+        return "?";
+    }
+
+    std::string_view toString(DepositOrigin origin)
+    {
+        switch (origin)
+        {
+        case DepositOrigin::Vein:
+            return "vein";
+        case DepositOrigin::Placer:
+            return "placer";
+        case DepositOrigin::Bog:
+            return "bog";
+        case DepositOrigin::Bedded:
+            return "bedded";
+        case DepositOrigin::Evaporite:
+            return "evaporite";
+        case DepositOrigin::SaltPan:
+            return "salt pan";
+        case DepositOrigin::Count:
             break;
         }
         return "?";

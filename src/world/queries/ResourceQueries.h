@@ -18,4 +18,14 @@ namespace olam
     // Requires the vegetation layer.
     BiologicalYields biologicalYieldsAt(const World &world, WorldCoord coord);
 
+    // Building materials 0..1 available almost everywhere, derived from rock, terrain and soil (not deposits).
+    struct LocalMaterials
+    {
+        float stone = 0.0f;
+        float clay = 0.0f;
+    };
+
+    // Requires the soil layer.
+    LocalMaterials localMaterialsAt(const World &world, WorldCoord coord);
+
 } // namespace olam

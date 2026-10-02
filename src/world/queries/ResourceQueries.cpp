@@ -2,6 +2,7 @@
 
 #include "world/World.h"
 #include "world/queries/HydrologyQueries.h"
+#include "world/queries/TerrainQueries.h"
 
 #include <algorithm>
 
@@ -83,6 +84,75 @@ namespace olam
                 fish = std::max(fish, world.terrain().elevation[ni] > -200 ? 1.0f : 0.6f);
         }
         result.fish = fish;
+        return result;
+    }
+
+    LocalMaterials localMaterialsAt(const World &world, WorldCoord coord)
+    {
+        LocalMaterials result;
+        const std::size_t i = world.index(coord);
+        if (world.geography().soil.empty() || world.hydrology().surfaceWater[i] != SurfaceWater::Land)
+            return result;
+
+        // Building stone: granite / basalt, marble / slate, limestone / sandstone; exposed on slopes and thin soils.
+        float rock = 0.7f;
+        switch (world.terrain().rockType[i])
+        {
+        case RockType::Igneous:
+            rock = 0.9f;
+            break;
+        case RockType::Metamorphic:
+            rock = 0.8f;
+            break;
+        default:
+            break;
+        }
+        float exposure = 0.4f;
+        switch (terrainClassAt(world, coord))
+        {
+        case TerrainClass::Hills:
+        case TerrainClass::Mountains:
+            exposure = 1.0f;
+            break;
+        case TerrainClass::Plateau:
+            exposure = 0.9f;
+            break;
+        case TerrainClass::Plains:
+            break;
+        }
+
+        const SoilType soil = world.geography().soil[i];
+        float clay = 0.2f;
+        switch (soil)
+        {
+        case SoilType::Rocky:
+            exposure = 1.0f;
+            clay = 0.1f;
+            break;
+        case SoilType::Clay:
+            clay = 1.0f;
+            break;
+        case SoilType::Alluvial:
+            exposure *= 0.3f;
+            clay = 0.9f;
+            break;
+        case SoilType::Loam:
+            clay = 0.5f;
+            break;
+        case SoilType::Laterite:
+            clay = 0.6f;
+            break;
+        case SoilType::Peat:
+            exposure *= 0.3f;
+            break;
+        case SoilType::Permafrost:
+            clay = 0.1f;
+            break;
+        default:
+            break;
+        }
+        result.stone = rock * exposure;
+        result.clay = clay;
         return result;
     }
 

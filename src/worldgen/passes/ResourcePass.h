@@ -9,8 +9,9 @@ namespace olam
 
     class World;
 
-    // Mineral deposits: a probability field per mineral (geology x terrain x climate x regional province noise)
-    // sampled with PCG and a minimum spacing into deposit clusters with a richness.
+    // Mineral deposits by how they form: hydrothermal veins in orogens / shields / granite, placers downstream of
+    // gold and tin veins, bedded coal and iron in sedimentary basins and shields, evaporite salt in basins, salt
+    // pans on warm coasts and desert playas, and bog iron in cool wetlands. Sampled with PCG and minimum spacing.
     class ResourcePass : public WorldGenerationPass
     {
     public:
@@ -19,8 +20,5 @@ namespace olam
         std::optional<std::string> validatePreconditions(const WorldGenContext &context) const override;
         void run(WorldGenContext &context) override;
     };
-
-    // Geology x terrain x climate suitability (0..1) of a land tile for a mineral, without province noise.
-    float mineralSuitability(const World &world, MineralType mineral, std::size_t index);
 
 } // namespace olam

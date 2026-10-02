@@ -119,8 +119,8 @@ namespace olam
             if (!depositId.isValid())
                 return "-";
             const Deposit &deposit = world.resources().deposits[depositId.index()];
-            return std::format("#{} {} (richness {} %, {} tiles)", depositId.value, toString(deposit.mineral),
-                               deposit.richness, deposit.tileCount);
+            return std::format("#{} {} {} (richness {} %, {} tiles)", depositId.value, toString(deposit.mineral),
+                               toString(deposit.origin), deposit.richness, deposit.tileCount);
         }
         case LayerId::Province:
             return std::string(toString(world.terrain().province[index]));
