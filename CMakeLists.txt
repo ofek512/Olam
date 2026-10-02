@@ -70,6 +70,21 @@ target_link_libraries(olam_core
 )
 
 # ---------------------------------------------------------------------------
+# olam_world: strategic world data model.
+# ---------------------------------------------------------------------------
+add_library(olam_world STATIC
+    src/world/WorldConfig.cpp
+    src/world/World.cpp
+    src/world/TileView.cpp
+    src/world/WorldLayers.cpp
+    src/world/WorldHash.cpp
+)
+target_link_libraries(olam_world
+    PUBLIC olam_core
+    PRIVATE olam_warnings
+)
+
+# ---------------------------------------------------------------------------
 # SDL-dependent targets
 # ---------------------------------------------------------------------------
 if(OLAM_BUILD_ENGINE)

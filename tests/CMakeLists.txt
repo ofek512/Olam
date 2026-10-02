@@ -15,3 +15,9 @@ olam_add_test_executable(olam_core_tests
     render/CameraTests.cpp
 )
 target_link_libraries(olam_core_tests PRIVATE olam_core)
+
+olam_add_test_executable(olam_world_tests
+    world/WorldConfigTests.cpp
+    world/WorldTests.cpp
+)
+target_link_libraries(olam_world_tests PRIVATE olam_world)
