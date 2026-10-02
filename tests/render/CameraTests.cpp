@@ -75,3 +75,16 @@ OLAM_TEST(camera_visible_rect_matches_viewport)
     OLAM_CHECK_NEAR(view.w, 80.0f, 1e-4);
     OLAM_CHECK_NEAR(view.h, 60.0f, 1e-4);
 }
+
+OLAM_TEST(camera_fit_to_centres_and_fits_rect)
+{
+    Camera2D camera = makeCamera();
+    camera.fitTo({0.0f, 0.0f, 2048.0f, 1024.0f}, 1.0f);
+    OLAM_CHECK_NEAR(camera.position().x, 1024.0f, 1e-4);
+    OLAM_CHECK_NEAR(camera.position().y, 512.0f, 1e-4);
+    // 800x600 viewport: width is the limiting side.
+    OLAM_CHECK_NEAR(camera.zoom(), 800.0f / 2048.0f, 1e-6);
+
+    camera.fitTo({0.0f, 0.0f, 4096.0f, 4096.0f}, 1.0f);
+    OLAM_CHECK_NEAR(camera.zoom(), Camera2D::kMinZoom, 1e-6);
+}

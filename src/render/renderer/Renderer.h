@@ -10,6 +10,8 @@ struct SDL_Renderer;
 namespace olam
 {
 
+    class Texture;
+
     struct Color
     {
         std::uint8_t r = 0;
@@ -30,6 +32,11 @@ namespace olam
         void endFrame();
 
         Vec2 outputSize() const;
+        int maxTextureSize() const;
+
+        // RGBA, nearest filtering. Returns an invalid texture on failure.
+        Texture createTexture(int width, int height);
+        void drawTexture(const Texture &texture, const Rect &source, const Rect &destination);
 
         void fillRect(const Rect &rect, Color color);
         void drawRect(const Rect &rect, Color color);

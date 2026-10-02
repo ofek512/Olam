@@ -105,19 +105,29 @@ if(OLAM_BUILD_ENGINE)
     add_library(olam_engine STATIC
         src/platform/sdl/SdlPlatform.cpp
         src/render/renderer/Renderer.cpp
-        src/render/debug_render/DebugOverlay.cpp
-        src/render/debug_render/TestPattern.cpp
+        src/render/texture/Texture.cpp
+        src/render/debug_render/TextPanel.cpp
     )
     target_link_libraries(olam_engine
         PUBLIC olam_core SDL3::SDL3-static
         PRIVATE olam_warnings
     )
 
+    add_library(olam_world_viewer STATIC
+        src/tools/world_viewer/WorldDebugRenderer.cpp
+        src/tools/world_viewer/TileInspector.cpp
+    )
+    target_link_libraries(olam_world_viewer
+        PUBLIC olam_engine olam_world
+        PRIVATE olam_warnings
+    )
+
     add_executable(Olam
         src/app/main.cpp
         src/app/Application.cpp
+        src/app/CommandLine.cpp
     )
-    target_link_libraries(Olam PRIVATE olam_engine olam_warnings)
+    target_link_libraries(Olam PRIVATE olam_world_viewer olam_worldgen olam_warnings)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Olam)
 endif()
 

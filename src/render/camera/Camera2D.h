@@ -10,7 +10,7 @@ namespace olam
     class Camera2D
     {
     public:
-        static constexpr float kMinZoom = 0.5f;
+        static constexpr float kMinZoom = 0.2f;
         static constexpr float kMaxZoom = 128.0f;
         static constexpr float kDefaultZoom = 16.0f;
 
@@ -30,6 +30,9 @@ namespace olam
 
         // Multiplies zoom while keeping the world point under screenPoint fixed.
         void zoomAt(Vec2 screenPoint, float factor);
+
+        // Centres on worldRect and zooms so it fills `fill` (0..1] of the viewport.
+        void fitTo(const Rect &worldRect, float fill = 0.95f);
 
         Vec2 worldToScreen(Vec2 world) const;
         Vec2 screenToWorld(Vec2 screen) const;

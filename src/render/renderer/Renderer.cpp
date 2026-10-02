@@ -1,5 +1,8 @@
 #include "render/renderer/Renderer.h"
 
+#include "core/logging/Log.h"
+#include "render/texture/Texture.h"
+
 #include <SDL3/SDL.h>
 
 namespace olam
@@ -28,6 +31,34 @@ namespace olam
         int h = 0;
         SDL_GetCurrentRenderOutputSize(m_renderer, &w, &h);
         return {static_cast<float>(w), static_cast<float>(h)};
+    }
+
+    int Renderer::maxTextureSize() const
+    {
+        const SDL_PropertiesID properties = SDL_GetRendererProperties(m_renderer);
+        return static_cast<int>(SDL_GetNumberProperty(properties, SDL_PROP_RENDERER_MAX_TEXTURE_SIZE_NUMBER, 0));
+    }
+
+    Texture Renderer::createTexture(int width, int height)
+    {
+        SDL_Texture *texture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, width, height);
+        if (!texture)
+        {
+            logging::error(LogCategory::Render, "SDL_CreateTexture {}x{} failed: {}", width, height, SDL_GetError());
+            return Texture{};
+        }
+        SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
+        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
+        return Texture(texture, width, height);
+    }
+
+    void Renderer::drawTexture(const Texture &texture, const Rect &source, const Rect &destination)
+    {
+        if (!texture.valid())
+            return;
+        const SDL_FRect src{source.x, source.y, source.w, source.h};
+        const SDL_FRect dst{destination.x, destination.y, destination.w, destination.h};
+        SDL_RenderTexture(m_renderer, texture.handle(), &src, &dst);
     }
 
     void Renderer::fillRect(const Rect &rect, Color color)

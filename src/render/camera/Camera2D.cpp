@@ -30,6 +30,13 @@ namespace olam
         m_position += anchorBefore - anchorAfter;
     }
 
+    void Camera2D::fitTo(const Rect &worldRect, float fill)
+    {
+        m_position = {worldRect.x + worldRect.w * 0.5f, worldRect.y + worldRect.h * 0.5f};
+        if (worldRect.w > 0.0f && worldRect.h > 0.0f)
+            setZoom(std::min(m_viewport.x / worldRect.w, m_viewport.y / worldRect.h) * fill);
+    }
+
     Vec2 Camera2D::worldToScreen(Vec2 world) const
     {
         return (world - m_position) * m_zoom + m_viewport * 0.5f;
