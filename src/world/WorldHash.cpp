@@ -13,7 +13,8 @@ namespace olam
         WorldHash result;
 
         ByteWriter writer;
-        visitWorldConfig(world.config(), [&](const auto &value) { writer.write(value); });
+        visitWorldConfig(world.config(), [&](const auto &value)
+                         { writer.write(value); });
         writer.write(world.seed());
 
         for (const WorldLayerDescriptor &descriptor : worldLayerDescriptors())
@@ -21,7 +22,8 @@ namespace olam
             if (!isLayerPresent(world, descriptor.id))
                 continue;
             std::uint64_t layerHash = 0;
-            visitLayer(world, descriptor.id, [&](const auto &layer) { layerHash = hashLayer(layer); });
+            visitLayer(world, descriptor.id, [&](const auto &layer)
+                       { layerHash = hashLayer(layer); });
             result.layers.push_back({descriptor.name, layerHash});
             writer.write(descriptor.id);
             writer.write(layerHash);

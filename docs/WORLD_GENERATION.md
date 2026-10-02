@@ -21,19 +21,19 @@ Regions, settlement suitability, settlements, roads and factions belong to Phase
   `parallel_for`. `std::execution::par` is not used (needs TBB on GCC, incomplete in libc++).
 - Each pass adds its persistent layer(s) when it is implemented; no placeholder layers.
 
-| Pass            | Produces                                                              |
-| --------------- | --------------------------------------------------------------------- |
-| TectonicsPass   | `plateId`, `rockType`                                                 |
-| ElevationPass   | `elevation`                                                           |
-| OceanPass       | `surfaceWater`, `distanceToOcean`                                     |
-| TemperaturePass | `meanAnnualTemperature`                                               |
-| RainfallPass    | `annualRainfall`, `moisture`                                          |
-| HydrologyPass   | `flowDirection`, `discharge`, `riverId`, `lakeId`, rivers, lakes      |
-| SoilPass        | `soil`                                                                |
-| BiomePass       | `biome`                                                               |
-| FertilityPass   | `fertility`                                                           |
-| VegetationPass  | `vegetation`, `treeCover`                                             |
-| ResourcePass    | `depositId`, deposits                                                 |
+| Pass            | Produces                                                         |
+| --------------- | ---------------------------------------------------------------- |
+| TectonicsPass   | `plateId`, `rockType`                                            |
+| ElevationPass   | `elevation`                                                      |
+| OceanPass       | `surfaceWater`, `distanceToOcean`                                |
+| TemperaturePass | `meanAnnualTemperature`                                          |
+| RainfallPass    | `annualRainfall`, `moisture`                                     |
+| HydrologyPass   | `flowDirection`, `discharge`, `riverId`, `lakeId`, rivers, lakes |
+| SoilPass        | `soil`                                                           |
+| BiomePass       | `biome`                                                          |
+| FertilityPass   | `fertility`                                                      |
+| VegetationPass  | `vegetation`, `treeCover`                                        |
+| ResourcePass    | `depositId`, deposits                                            |
 
 All tuning values live in `WorldConfig::generation` (`WorldGenSettings`), have documented defaults, are
 validated and are part of the world hash. Working layers may be shared between passes within one run

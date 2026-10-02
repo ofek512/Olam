@@ -1,10 +1,13 @@
 #include "tools/world_viewer/WorldViews.h"
 
 #include "core/debug/Assert.h"
+#include "tools/world_viewer/ColorRamp.h"
 #include "tools/world_viewer/DebugHashView.h"
 #include "world/World.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 
 namespace olam
 {
@@ -41,10 +44,120 @@ namespace olam
                 for (int x = 0; x < world.width(); ++x)
                 {
                     const std::uint8_t value = world_viewer::debugValue(coordinateHash(seed, x, y));
-                    rgba[i++] = value;
-                    rgba[i++] = value;
-                    rgba[i++] = value;
-                    rgba[i++] = 255;
+                    writePixel(rgba, i++, {value, value, value});
+                }
+            }
+        }
+
+        constexpr std::array<ColorStop, 8> kLandTints = {{
+            {0.0f, {70, 130, 60}},
+            {150.0f, {95, 150, 75}},
+            {400.0f, {150, 170, 95}},
+            {800.0f, {185, 170, 110}},
+            {1500.0f, {165, 130, 90}},
+            {2500.0f, {140, 110, 90}},
+            {3500.0f, {215, 215, 215}},
+            {4500.0f, {255, 255, 255}},
+        }};
+
+        constexpr std::array<ColorStop, 4> kSeaTints = {{
+            {-4500.0f, {15, 35, 90}},
+            {-1500.0f, {40, 90, 160}},
+            {-200.0f, {70, 140, 200}},
+            {0.0f, {110, 170, 210}},
+        }};
+
+        constexpr std::array<ColorStop, 3> kGrayRamp = {{
+            {-4500.0f, {0, 0, 0}},
+            {0.0f, {110, 110, 110}},
+            {4500.0f, {255, 255, 255}},
+        }};
+
+        bool isWater(const World &world, std::size_t index)
+        {
+            return world.terrain().elevation[index] < 0;
+        }
+
+        // Lambert shading with light from the north-west; ~1 on flat ground.
+        float hillshade(const World &world, int x, int y)
+        {
+            const auto &elevation = world.terrain().elevation;
+            const int x0 = std::max(x - 1, 0);
+            const int x1 = std::min(x + 1, world.width() - 1);
+            const int y0 = std::max(y - 1, 0);
+            const int y1 = std::min(y + 1, world.height() - 1);
+            const auto tile = static_cast<float>(world.config().tileSizeMeters);
+            constexpr float kExaggeration = 20.0f;
+            const float dzdx = static_cast<float>(std::max<int>(elevation.at(x1, y), 0) - std::max<int>(elevation.at(x0, y), 0)) /
+                               (static_cast<float>(x1 - x0) * tile) * kExaggeration;
+            const float dzdy = static_cast<float>(std::max<int>(elevation.at(x, y1), 0) - std::max<int>(elevation.at(x, y0), 0)) /
+                               (static_cast<float>(y1 - y0) * tile) * kExaggeration;
+            const float length = std::sqrt(dzdx * dzdx + dzdy * dzdy + 1.0f);
+            constexpr float kLight = 0.57735f;
+            const float lambert = (dzdx * kLight + dzdy * kLight + kLight) / length;
+            return std::clamp(0.4f + 1.04f * lambert, 0.45f, 1.3f);
+        }
+
+        void colorizeTerrain(const World &world, const ViewOptions &options, std::span<std::uint8_t> rgba)
+        {
+            const auto &elevation = world.terrain().elevation;
+            for (int y = 0; y < world.height(); ++y)
+            {
+                for (int x = 0; x < world.width(); ++x)
+                {
+                    const std::size_t i = elevation.index(x, y);
+                    const auto meters = static_cast<float>(elevation[i]);
+                    if (isWater(world, i))
+                    {
+                        writePixel(rgba, i, sampleRamp(kSeaTints, meters));
+                        continue;
+                    }
+                    Rgb color = sampleRamp(kLandTints, meters);
+                    if (options.hillshade)
+                        color = scale(color, hillshade(world, x, y));
+                    writePixel(rgba, i, color);
+                }
+            }
+        }
+
+        void colorizeElevation(const World &world, const ViewOptions &options, std::span<std::uint8_t> rgba)
+        {
+            const auto &elevation = world.terrain().elevation;
+            for (int y = 0; y < world.height(); ++y)
+            {
+                for (int x = 0; x < world.width(); ++x)
+                {
+                    const std::size_t i = elevation.index(x, y);
+                    Rgb color = sampleRamp(kGrayRamp, static_cast<float>(elevation[i]));
+                    if (options.hillshade && elevation[i] >= 0)
+                        color = scale(color, hillshade(world, x, y));
+                    writePixel(rgba, i, color);
+                }
+            }
+        }
+
+        void colorizeGeology(const World &world, std::span<std::uint8_t> rgba)
+        {
+            constexpr std::array<Rgb, 3> kRockColors = {{{205, 180, 130}, {150, 70, 60}, {130, 110, 160}}};
+            const auto &terrain = world.terrain();
+            for (int y = 0; y < world.height(); ++y)
+            {
+                for (int x = 0; x < world.width(); ++x)
+                {
+                    const std::size_t i = terrain.plateId.index(x, y);
+                    const std::uint8_t plate = terrain.plateId[i];
+                    const bool boundary = (x + 1 < world.width() && terrain.plateId.at(x + 1, y) != plate) ||
+                                          (y + 1 < world.height() && terrain.plateId.at(x, y + 1) != plate);
+                    if (boundary)
+                    {
+                        writePixel(rgba, i, {20, 20, 20});
+                        continue;
+                    }
+                    Rgb color = kRockColors[static_cast<std::size_t>(terrain.rockType[i])];
+                    color = scale(color, 0.8f + 0.3f * static_cast<float>((plate * 37u) % 16u) / 15.0f);
+                    if (!terrain.elevation.empty() && isWater(world, i))
+                        color = scale(color, 0.6f);
+                    writePixel(rgba, i, color);
                 }
             }
         }
@@ -59,9 +172,14 @@ namespace olam
 
     bool isViewAvailable(const World &world, WorldView view)
     {
-        (void)world;
+        const bool hasElevation = !world.terrain().elevation.empty();
         switch (view)
         {
+        case WorldView::Terrain:
+        case WorldView::Elevation:
+            return hasElevation;
+        case WorldView::Geology:
+            return !world.terrain().rockType.empty();
         case WorldView::HashDebug:
             return true;
         default:
@@ -89,10 +207,20 @@ namespace olam
 
     void colorizeView(const World &world, WorldView view, const ViewOptions &options, std::span<std::uint8_t> rgba)
     {
-        (void)options;
         OLAM_ASSERT(rgba.size() == world.tileCount() * 4);
+        if (!isViewAvailable(world, view))
+            view = WorldView::HashDebug;
         switch (view)
         {
+        case WorldView::Terrain:
+            colorizeTerrain(world, options, rgba);
+            break;
+        case WorldView::Elevation:
+            colorizeElevation(world, options, rgba);
+            break;
+        case WorldView::Geology:
+            colorizeGeology(world, rgba);
+            break;
         case WorldView::HashDebug:
         default:
             colorizeHashDebug(world, rgba);

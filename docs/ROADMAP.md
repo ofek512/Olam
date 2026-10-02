@@ -23,8 +23,8 @@ Short status checklist. Full vision and rationale: [agent.MD](../agent.MD).
 
 ## Phase 3 — Natural world generation (= Milestone 1: procedural natural world viewer)
 
-- [ ] Infrastructure: noise, math helpers, generation settings, layer descriptors, view framework
-- [ ] 3A Tectonics + elevation (plates, rock type)
+- [x] Infrastructure: noise, math helpers, generation settings, layer descriptors, view framework
+- [x] 3A Tectonics + elevation (plates, rock type)
 - [ ] 3B Ocean (+ distance to ocean)
 - [ ] 3C Temperature
 - [ ] 3D Rainfall / moisture

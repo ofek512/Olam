@@ -3,6 +3,7 @@
 #include "tools/world_viewer/DebugHashView.h"
 #include "world/World.h"
 #include "world/WorldLayers.h"
+#include "world/queries/TerrainQueries.h"
 
 #include <cmath>
 #include <format>
@@ -36,6 +37,12 @@ namespace olam
         {
             if (isLayerPresent(world, descriptor.id))
                 lines.push_back(std::format("{}: {}", descriptor.name, formatLayerValue(world, descriptor.id, tile.index())));
+        }
+
+        if (!world.terrain().elevation.empty() && world.terrain().elevation[tile.index()] >= 0)
+        {
+            lines.push_back(std::format("Slope: {:.1f} %  ({})", slopeAt(world, coord) * 100.0f,
+                                        toString(terrainClassAt(world, coord))));
         }
 
         if (options.showDebugHash)

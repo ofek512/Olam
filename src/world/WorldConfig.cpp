@@ -40,8 +40,28 @@ namespace olam
         return validateGenerationSettings(config.generation);
     }
 
-    std::optional<std::string> validateGenerationSettings(const WorldGenSettings &)
+    std::optional<std::string> validateGenerationSettings(const WorldGenSettings &settings)
     {
+        const auto &t = settings.tectonics;
+        if (t.plateCount < 2 || t.plateCount > 255)
+            return std::format("plate count {} must be within [2, 255]", t.plateCount);
+        if (!(t.continentalFraction > 0.0f && t.continentalFraction < 1.0f))
+            return "continental fraction must be within (0, 1)";
+        if (!(t.boundaryWarpKm >= 0.0f && t.boundaryWarpWavelengthKm > 0.0f && t.boundaryBlendKm > 0.0f &&
+              t.beltWidthKm > 0.0f && t.mountainWidthKm > 0.0f && t.riftWidthKm > 0.0f))
+            return "tectonic distances must be positive";
+
+        const auto &e = settings.elevation;
+        if (!(e.landFraction > 0.0f && e.landFraction < 1.0f))
+            return "land fraction must be within (0, 1)";
+        if (!(e.landFractionVariation >= 0.0f && e.landFractionVariation < 0.5f))
+            return "land fraction variation must be within [0, 0.5)";
+        if (!(e.noiseWavelengthKm > 0.0f))
+            return "elevation noise wavelength must be positive";
+        if (e.noiseOctaves < 1 || e.noiseOctaves > 12)
+            return "elevation noise octaves must be within [1, 12]";
+        if (e.smoothingIterations < 0 || e.smoothingIterations > 100 || e.minIslandTiles < 0)
+            return "elevation smoothing / island settings out of range";
         return std::nullopt;
     }
 

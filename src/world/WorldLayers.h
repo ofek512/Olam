@@ -14,6 +14,9 @@ namespace olam
     // Every persistent world layer. Values are persisted in save files; append only, never reorder.
     enum class LayerId : std::uint8_t
     {
+        PlateId,
+        RockType,
+        Elevation,
         Count,
     };
 
@@ -31,10 +34,17 @@ namespace olam
     template <typename WorldT, typename F>
     void visitLayer(WorldT &world, LayerId id, F &&f)
     {
-        (void)world;
-        (void)f;
         switch (id)
         {
+        case LayerId::PlateId:
+            f(world.terrain().plateId);
+            break;
+        case LayerId::RockType:
+            f(world.terrain().rockType);
+            break;
+        case LayerId::Elevation:
+            f(world.terrain().elevation);
+            break;
         case LayerId::Count:
             break;
         }
