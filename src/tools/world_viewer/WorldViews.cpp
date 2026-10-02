@@ -75,6 +75,9 @@ namespace olam
 
         bool isWater(const World &world, std::size_t index)
         {
+            const auto &water = world.hydrology().surfaceWater;
+            if (!water.empty())
+                return water[index] != SurfaceWater::Land;
             return world.terrain().elevation[index] < 0;
         }
 
@@ -162,6 +165,28 @@ namespace olam
             }
         }
 
+        constexpr Rgb kWaterOverlay{20, 40, 80};
+
+        // Colours each tile by value(index) on a ramp; water tiles are blended toward dark blue.
+        template <typename ValueFn>
+        void colorizeRamp(const World &world, std::span<const ColorStop> ramp, ValueFn value, std::span<std::uint8_t> rgba)
+        {
+            for (std::size_t i = 0; i < world.tileCount(); ++i)
+            {
+                Rgb color = sampleRamp(ramp, value(i));
+                if (isWater(world, i))
+                    color = mix(color, kWaterOverlay, 0.75f);
+                writePixel(rgba, i, color);
+            }
+        }
+
+        constexpr std::array<ColorStop, 4> kDistanceRamp = {{
+            {0.0f, {255, 255, 255}},
+            {100.0f, {255, 220, 150}},
+            {400.0f, {220, 130, 60}},
+            {1000.0f, {120, 40, 20}},
+        }};
+
     } // namespace
 
     const WorldViewInfo &viewInfo(WorldView view)
@@ -180,6 +205,8 @@ namespace olam
             return hasElevation;
         case WorldView::Geology:
             return !world.terrain().rockType.empty();
+        case WorldView::DistanceToOcean:
+            return !world.hydrology().distanceToOceanKm.empty();
         case WorldView::HashDebug:
             return true;
         default:
@@ -221,6 +248,12 @@ namespace olam
         case WorldView::Geology:
             colorizeGeology(world, rgba);
             break;
+        case WorldView::DistanceToOcean:
+        {
+            const auto &distance = world.hydrology().distanceToOceanKm;
+            colorizeRamp(world, kDistanceRamp, [&](std::size_t i) { return static_cast<float>(distance[i]); }, rgba);
+            break;
+        }
         case WorldView::HashDebug:
         default:
             colorizeHashDebug(world, rgba);

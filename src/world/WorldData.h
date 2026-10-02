@@ -23,6 +23,8 @@ namespace olam
 
     struct HydrologyData
     {
+        Layer<SurfaceWater> surfaceWater;
+        Layer<std::uint16_t> distanceToOceanKm;
     };
 
     struct GeographyData

@@ -62,6 +62,8 @@ namespace olam
             return "elevation noise octaves must be within [1, 12]";
         if (e.smoothingIterations < 0 || e.smoothingIterations > 100 || e.minIslandTiles < 0)
             return "elevation smoothing / island settings out of range";
+        if (settings.ocean.minInlandSeaTiles < 1)
+            return "minimum inland sea size must be positive";
         return std::nullopt;
     }
 

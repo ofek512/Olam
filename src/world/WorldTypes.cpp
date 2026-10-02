@@ -19,4 +19,20 @@ namespace olam
         return "?";
     }
 
+    std::string_view toString(SurfaceWater water)
+    {
+        switch (water)
+        {
+        case SurfaceWater::Land:
+            return "Land";
+        case SurfaceWater::Ocean:
+            return "Ocean";
+        case SurfaceWater::Lake:
+            return "Lake";
+        case SurfaceWater::Count:
+            break;
+        }
+        return "?";
+    }
+
 } // namespace olam

@@ -40,12 +40,19 @@ namespace olam
         std::int32_t minIslandTiles = 4;
     };
 
+    struct OceanSettings
+    {
+        // Below-sea bodies not touching the map edge count as ocean (inland seas) from this size on.
+        std::int32_t minInlandSeaTiles = 2000;
+    };
+
     // Tuning values for every generation pass. Part of WorldConfig, so they are validated, hashed and saved.
     // Each pass adds its own group when it is implemented.
     struct WorldGenSettings
     {
         TectonicsSettings tectonics;
         ElevationSettings elevation;
+        OceanSettings ocean;
     };
 
     // Calls visit(field) for every setting in a fixed order (hashing, saving, loading).
@@ -73,6 +80,8 @@ namespace olam
         visit(e.smoothingIterations);
         visit(e.smoothingTalus);
         visit(e.minIslandTiles);
+
+        visit(settings.ocean.minInlandSeaTiles);
     }
 
     std::optional<std::string> validateGenerationSettings(const WorldGenSettings &settings);

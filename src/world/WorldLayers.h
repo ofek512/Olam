@@ -17,6 +17,8 @@ namespace olam
         PlateId,
         RockType,
         Elevation,
+        SurfaceWater,
+        DistanceToOcean,
         Count,
     };
 
@@ -44,6 +46,12 @@ namespace olam
             break;
         case LayerId::Elevation:
             f(world.terrain().elevation);
+            break;
+        case LayerId::SurfaceWater:
+            f(world.hydrology().surfaceWater);
+            break;
+        case LayerId::DistanceToOcean:
+            f(world.hydrology().distanceToOceanKm);
             break;
         case LayerId::Count:
             break;

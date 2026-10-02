@@ -28,5 +28,6 @@ target_link_libraries(olam_world_tests PRIVATE olam_world)
 olam_add_test_executable(olam_worldgen_tests
     worldgen/WorldGeneratorTests.cpp
     worldgen/PipelineTests.cpp
+    worldgen/OceanTests.cpp
 )
 target_link_libraries(olam_worldgen_tests PRIVATE olam_worldgen)

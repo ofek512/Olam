@@ -33,6 +33,22 @@ namespace olam
                                         100.0 * static_cast<double>(aboveSea) / static_cast<double>(elevation.size()),
                                         highest, deepest));
         }
+
+        const auto &water = world.hydrology().surfaceWater;
+        if (!water.empty())
+        {
+            std::size_t counts[static_cast<std::size_t>(SurfaceWater::Count)] = {};
+            for (const SurfaceWater kind : water.values())
+                ++counts[static_cast<std::size_t>(kind)];
+            const auto percent = [&](SurfaceWater kind)
+            { return 100.0 * static_cast<double>(counts[static_cast<std::size_t>(kind)]) / static_cast<double>(water.size()); };
+            std::uint16_t farthest = 0;
+            for (const std::uint16_t km : world.hydrology().distanceToOceanKm.values())
+                farthest = std::max(farthest, km);
+            lines.push_back(std::format("Land {:.1f} %   ocean {:.1f} %   lakes {:.1f} %   max {} km from sea",
+                                        percent(SurfaceWater::Land), percent(SurfaceWater::Ocean),
+                                        percent(SurfaceWater::Lake), farthest));
+        }
         return lines;
     }
 

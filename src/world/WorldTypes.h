@@ -18,4 +18,15 @@ namespace olam
 
     std::string_view toString(RockType rock);
 
+    // Standing water only; rivers flow through Land tiles.
+    enum class SurfaceWater : std::uint8_t
+    {
+        Land,
+        Ocean,
+        Lake,
+        Count,
+    };
+
+    std::string_view toString(SurfaceWater water);
+
 } // namespace olam

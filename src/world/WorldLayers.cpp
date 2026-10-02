@@ -9,10 +9,12 @@ namespace olam
     namespace
     {
 
-        constexpr std::array<WorldLayerDescriptor, 3> kDescriptors = {{
+        constexpr std::array<WorldLayerDescriptor, 5> kDescriptors = {{
             {LayerId::PlateId, "Plate", ""},
             {LayerId::RockType, "Rock", ""},
             {LayerId::Elevation, "Elevation", "m"},
+            {LayerId::SurfaceWater, "Water", ""},
+            {LayerId::DistanceToOcean, "To ocean", "km"},
         }};
 
     } // namespace
@@ -40,6 +42,10 @@ namespace olam
             return std::string(toString(world.terrain().rockType[index]));
         case LayerId::Elevation:
             return std::format("{} m", world.terrain().elevation[index]);
+        case LayerId::SurfaceWater:
+            return std::string(toString(world.hydrology().surfaceWater[index]));
+        case LayerId::DistanceToOcean:
+            return std::format("{} km", world.hydrology().distanceToOceanKm[index]);
         case LayerId::Count:
             break;
         }
