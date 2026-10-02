@@ -70,6 +70,24 @@ OLAM_TEST(biome_invariants)
     }
     // A 70-degree latitude span produces a varied world.
     OLAM_CHECK(kinds >= 7);
+
+    const auto &vegetation = world->geography().vegetation;
+    const auto &treeCover = world->geography().treeCover;
+    std::size_t forest = 0;
+    for (std::size_t i = 0; i < world->tileCount(); ++i)
+    {
+        OLAM_CHECK(treeCover[i] <= 100);
+        OLAM_CHECK((vegetation[i] == VegetationType::None) == (biome[i] == Biome::None));
+        if (vegetation[i] == VegetationType::DenseForest)
+            OLAM_CHECK(treeCover[i] >= 75);
+        if (vegetation[i] == VegetationType::Grass || vegetation[i] == VegetationType::Scrub ||
+            vegetation[i] == VegetationType::Barren)
+            OLAM_CHECK(treeCover[i] < 20);
+        if (biome[i] == Biome::HotDesert || biome[i] == Biome::Ice)
+            OLAM_CHECK(treeCover[i] == 0);
+        forest += vegetation[i] == VegetationType::Forest || vegetation[i] == VegetationType::DenseForest ? 1u : 0u;
+    }
+    OLAM_CHECK(forest > 0);
 }
 
 OLAM_TEST(temperature_invariants)

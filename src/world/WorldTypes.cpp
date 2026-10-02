@@ -139,4 +139,30 @@ namespace olam
         return "?";
     }
 
+    std::string_view toString(VegetationType vegetation)
+    {
+        switch (vegetation)
+        {
+        case VegetationType::None:
+            return "None";
+        case VegetationType::Barren:
+            return "Barren";
+        case VegetationType::Grass:
+            return "Grass";
+        case VegetationType::Scrub:
+            return "Scrub";
+        case VegetationType::LightForest:
+            return "Light forest";
+        case VegetationType::Forest:
+            return "Forest";
+        case VegetationType::DenseForest:
+            return "Dense forest";
+        case VegetationType::Wetland:
+            return "Wetland";
+        case VegetationType::Count:
+            break;
+        }
+        return "?";
+    }
+
 } // namespace olam

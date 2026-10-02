@@ -27,6 +27,8 @@ namespace olam
             {LayerId::Soil, "Soil", ""},
             {LayerId::Biome, "Biome", ""},
             {LayerId::Fertility, "Fertility", "%"},
+            {LayerId::Vegetation, "Vegetation", ""},
+            {LayerId::TreeCover, "Tree cover", "%"},
         };
 
         constexpr std::string_view kDirectionNames[] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
@@ -105,6 +107,10 @@ namespace olam
             return std::string(toString(world.geography().biome[index]));
         case LayerId::Fertility:
             return std::format("{:.0f} %", world.geography().fertility[index] / 2.55);
+        case LayerId::Vegetation:
+            return std::string(toString(world.geography().vegetation[index]));
+        case LayerId::TreeCover:
+            return std::format("{} %", world.geography().treeCover[index]);
         case LayerId::Count:
             break;
         }

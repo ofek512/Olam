@@ -93,6 +93,9 @@ namespace olam
         const auto &fertility = settings.fertility;
         if (!(fertility.floodplainBonus >= 0.0f && fertility.riverIrrigation >= 0.0f && fertility.riverIrrigation <= 1.0f))
             return "fertility settings out of range";
+        const auto &vegetation = settings.vegetation;
+        if (!(vegetation.noiseAmplitude >= 0.0f && vegetation.noiseAmplitude < 1.0f && vegetation.noiseWavelengthKm > 0.0f))
+            return "vegetation settings out of range";
         return std::nullopt;
     }
 

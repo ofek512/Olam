@@ -134,6 +134,13 @@ namespace olam
         float riverIrrigation = 0.95f;
     };
 
+    struct VegetationSettings
+    {
+        // Multiplicative tree cover variation (1 +- amplitude) for patchy forests and clearings.
+        float noiseAmplitude = 0.3f;
+        float noiseWavelengthKm = 40.0f;
+    };
+
     // Tuning values for every generation pass. Part of WorldConfig, so they are validated, hashed and saved.
     // Each pass adds its own group when it is implemented.
     struct WorldGenSettings
@@ -147,6 +154,7 @@ namespace olam
         SoilSettings soil;
         BiomeSettings biome;
         FertilitySettings fertility;
+        VegetationSettings vegetation;
     };
 
     // Calls visit(field) for every setting in a fixed order (hashing, saving, loading).
@@ -232,6 +240,10 @@ namespace olam
         auto &fertility = settings.fertility;
         visit(fertility.floodplainBonus);
         visit(fertility.riverIrrigation);
+
+        auto &vegetation = settings.vegetation;
+        visit(vegetation.noiseAmplitude);
+        visit(vegetation.noiseWavelengthKm);
     }
 
     std::optional<std::string> validateGenerationSettings(const WorldGenSettings &settings);

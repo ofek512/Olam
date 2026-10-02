@@ -29,6 +29,8 @@ namespace olam
         Soil,
         Biome,
         Fertility,
+        Vegetation,
+        TreeCover,
         Count,
     };
 
@@ -92,6 +94,12 @@ namespace olam
             break;
         case LayerId::Fertility:
             f(world.geography().fertility);
+            break;
+        case LayerId::Vegetation:
+            f(world.geography().vegetation);
+            break;
+        case LayerId::TreeCover:
+            f(world.geography().treeCover);
             break;
         case LayerId::Count:
             break;

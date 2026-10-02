@@ -97,4 +97,21 @@ namespace olam
 
     std::string_view toString(Biome biome);
 
+    enum class VegetationType : std::uint8_t
+    {
+        // Water tiles.
+        None,
+        // Bare rock, sand or ice.
+        Barren,
+        Grass,
+        Scrub,
+        LightForest,
+        Forest,
+        DenseForest,
+        Wetland,
+        Count,
+    };
+
+    std::string_view toString(VegetationType vegetation);
+
 } // namespace olam

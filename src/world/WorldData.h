@@ -88,6 +88,9 @@ namespace olam
         Layer<Biome> biome;
         // Natural fertility 0..255 (product of climate, terrain, water and soil factors).
         Layer<std::uint8_t> fertility;
+        Layer<VegetationType> vegetation;
+        // Percent of the tile covered by tree canopy (0..100).
+        Layer<std::uint8_t> treeCover;
     };
 
 } // namespace olam

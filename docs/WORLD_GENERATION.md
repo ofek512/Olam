@@ -178,7 +178,9 @@ other intermediate layers.
 - Fertility = product of climate, terrain, water access and soil factors, with a floodplain bonus scaled by
   river discharge. Floodplains count as irrigated (moisture factor ≥ 0.95 × floodplain strength), so rivers make
   green valleys through dry interiors. Grain / livestock / orchard suitability: `world/queries/AgricultureQueries`.
-- Vegetation category + tree cover from biome, moisture, fertility, slope and small noise.
+- Vegetation category + tree cover from biome, moisture, fertility, slope and small noise. Tree cover = biome
+  potential × moisture × fertility × slope × patchiness noise; category by cover (dense forest ≥ 75 %, forest
+  ≥ 45 %, light forest ≥ 20 %), otherwise grass / scrub / barren by biome; wetland biome -> wetland.
 
 ### Resources
 

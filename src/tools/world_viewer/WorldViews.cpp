@@ -238,6 +238,24 @@ namespace olam
             {255.0f, {30, 110, 30}},
         }};
 
+        constexpr std::array<ColorStop, 4> kTreeCoverRamp = {{
+            {0.0f, {225, 215, 170}},
+            {20.0f, {170, 195, 110}},
+            {50.0f, {70, 140, 60}},
+            {100.0f, {15, 70, 30}},
+        }};
+
+        constexpr std::array<Rgb, static_cast<std::size_t>(VegetationType::Count)> kVegetationColors = {{
+            {30, 45, 80},    // None (water)
+            {200, 195, 180}, // Barren
+            {175, 200, 100}, // Grass
+            {175, 165, 100}, // Scrub
+            {110, 165, 70},  // Light forest
+            {50, 120, 50},   // Forest
+            {20, 75, 35},    // Dense forest
+            {70, 130, 120},  // Wetland
+        }};
+
         constexpr std::array<Rgb, static_cast<std::size_t>(SoilType::Count)> kSoilColors = {{
             {30, 45, 80},    // None (water)
             {125, 120, 115}, // Rocky
@@ -360,6 +378,10 @@ namespace olam
             return !world.geography().biome.empty();
         case WorldView::Fertility:
             return !world.geography().fertility.empty();
+        case WorldView::Vegetation:
+            return !world.geography().vegetation.empty();
+        case WorldView::TreeCover:
+            return !world.geography().treeCover.empty();
         case WorldView::HashDebug:
             return true;
         default:
@@ -443,6 +465,16 @@ namespace olam
             const auto &fertility = world.geography().fertility;
             colorizeRamp(world, kFertilityRamp, [&](std::size_t i)
                          { return static_cast<float>(fertility[i]); }, rgba);
+            break;
+        }
+        case WorldView::Vegetation:
+            colorizeCategories(world, world.geography().vegetation, kVegetationColors, options, rgba);
+            break;
+        case WorldView::TreeCover:
+        {
+            const auto &treeCover = world.geography().treeCover;
+            colorizeRamp(world, kTreeCoverRamp, [&](std::size_t i)
+                         { return static_cast<float>(treeCover[i]); }, rgba);
             break;
         }
         case WorldView::HashDebug:
