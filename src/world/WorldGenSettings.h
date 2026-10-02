@@ -46,6 +46,15 @@ namespace olam
         std::int32_t minInlandSeaTiles = 2000;
     };
 
+    struct TemperatureSettings
+    {
+        float lapseRatePerKm = 6.5f;
+        // Extra cooling of continental interiors (>= 1000 km from the sea) at mid/high latitudes.
+        float continentalCooling = 3.0f;
+        float noiseAmplitude = 1.5f;
+        float noiseWavelengthKm = 800.0f;
+    };
+
     // Tuning values for every generation pass. Part of WorldConfig, so they are validated, hashed and saved.
     // Each pass adds its own group when it is implemented.
     struct WorldGenSettings
@@ -53,6 +62,7 @@ namespace olam
         TectonicsSettings tectonics;
         ElevationSettings elevation;
         OceanSettings ocean;
+        TemperatureSettings temperature;
     };
 
     // Calls visit(field) for every setting in a fixed order (hashing, saving, loading).
@@ -82,6 +92,12 @@ namespace olam
         visit(e.minIslandTiles);
 
         visit(settings.ocean.minInlandSeaTiles);
+
+        auto &temperature = settings.temperature;
+        visit(temperature.lapseRatePerKm);
+        visit(temperature.continentalCooling);
+        visit(temperature.noiseAmplitude);
+        visit(temperature.noiseWavelengthKm);
     }
 
     std::optional<std::string> validateGenerationSettings(const WorldGenSettings &settings);

@@ -9,13 +9,14 @@ namespace olam
     namespace
     {
 
-        constexpr std::array<WorldLayerDescriptor, 5> kDescriptors = {{
+        constexpr WorldLayerDescriptor kDescriptors[] = {
             {LayerId::PlateId, "Plate", ""},
             {LayerId::RockType, "Rock", ""},
             {LayerId::Elevation, "Elevation", "m"},
             {LayerId::SurfaceWater, "Water", ""},
             {LayerId::DistanceToOcean, "To ocean", "km"},
-        }};
+            {LayerId::Temperature, "Temperature", "C"},
+        };
 
     } // namespace
 
@@ -46,6 +47,8 @@ namespace olam
             return std::string(toString(world.hydrology().surfaceWater[index]));
         case LayerId::DistanceToOcean:
             return std::format("{} km", world.hydrology().distanceToOceanKm[index]);
+        case LayerId::Temperature:
+            return std::format("{:.1f} C", world.climate().meanAnnualTemperature[index] / 10.0);
         case LayerId::Count:
             break;
         }

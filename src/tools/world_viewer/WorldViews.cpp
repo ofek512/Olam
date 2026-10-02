@@ -169,13 +169,14 @@ namespace olam
 
         // Colours each tile by value(index) on a ramp; water tiles are blended toward dark blue.
         template <typename ValueFn>
-        void colorizeRamp(const World &world, std::span<const ColorStop> ramp, ValueFn value, std::span<std::uint8_t> rgba)
+        void colorizeRamp(const World &world, std::span<const ColorStop> ramp, ValueFn value, std::span<std::uint8_t> rgba,
+                          float waterBlend = 0.75f)
         {
             for (std::size_t i = 0; i < world.tileCount(); ++i)
             {
                 Rgb color = sampleRamp(ramp, value(i));
                 if (isWater(world, i))
-                    color = mix(color, kWaterOverlay, 0.75f);
+                    color = mix(color, kWaterOverlay, waterBlend);
                 writePixel(rgba, i, color);
             }
         }
@@ -185,6 +186,16 @@ namespace olam
             {100.0f, {255, 220, 150}},
             {400.0f, {220, 130, 60}},
             {1000.0f, {120, 40, 20}},
+        }};
+
+        constexpr std::array<ColorStop, 7> kTemperatureRamp = {{
+            {-30.0f, {120, 60, 160}},
+            {-10.0f, {60, 90, 210}},
+            {0.0f, {130, 200, 230}},
+            {10.0f, {110, 190, 90}},
+            {18.0f, {235, 220, 90}},
+            {25.0f, {240, 140, 50}},
+            {32.0f, {190, 30, 30}},
         }};
 
     } // namespace
@@ -207,6 +218,8 @@ namespace olam
             return !world.terrain().rockType.empty();
         case WorldView::DistanceToOcean:
             return !world.hydrology().distanceToOceanKm.empty();
+        case WorldView::Temperature:
+            return !world.climate().meanAnnualTemperature.empty();
         case WorldView::HashDebug:
             return true;
         default:
@@ -252,6 +265,13 @@ namespace olam
         {
             const auto &distance = world.hydrology().distanceToOceanKm;
             colorizeRamp(world, kDistanceRamp, [&](std::size_t i) { return static_cast<float>(distance[i]); }, rgba);
+            break;
+        }
+        case WorldView::Temperature:
+        {
+            const auto &temperature = world.climate().meanAnnualTemperature;
+            colorizeRamp(world, kTemperatureRamp, [&](std::size_t i) { return static_cast<float>(temperature[i]) / 10.0f; },
+                         rgba, 0.35f);
             break;
         }
         case WorldView::HashDebug:

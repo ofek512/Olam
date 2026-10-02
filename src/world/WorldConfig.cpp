@@ -64,6 +64,9 @@ namespace olam
             return "elevation smoothing / island settings out of range";
         if (settings.ocean.minInlandSeaTiles < 1)
             return "minimum inland sea size must be positive";
+        if (!(settings.temperature.lapseRatePerKm >= 0.0f && settings.temperature.continentalCooling >= 0.0f &&
+              settings.temperature.noiseAmplitude >= 0.0f && settings.temperature.noiseWavelengthKm > 0.0f))
+            return "temperature settings out of range";
         return std::nullopt;
     }
 

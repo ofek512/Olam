@@ -19,6 +19,7 @@ namespace olam
         Elevation,
         SurfaceWater,
         DistanceToOcean,
+        Temperature,
         Count,
     };
 
@@ -52,6 +53,9 @@ namespace olam
             break;
         case LayerId::DistanceToOcean:
             f(world.hydrology().distanceToOceanKm);
+            break;
+        case LayerId::Temperature:
+            f(world.climate().meanAnnualTemperature);
             break;
         case LayerId::Count:
             break;

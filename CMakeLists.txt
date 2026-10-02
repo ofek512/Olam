@@ -102,6 +102,7 @@ add_library(olam_worldgen STATIC
     src/worldgen/passes/TectonicsPass.cpp
     src/worldgen/passes/ElevationPass.cpp
     src/worldgen/passes/OceanPass.cpp
+    src/worldgen/passes/TemperaturePass.cpp
 )
 target_link_libraries(olam_worldgen
     PUBLIC olam_world

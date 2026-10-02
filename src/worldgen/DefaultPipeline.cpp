@@ -4,6 +4,7 @@
 #include "worldgen/passes/ElevationPass.h"
 #include "worldgen/passes/OceanPass.h"
 #include "worldgen/passes/TectonicsPass.h"
+#include "worldgen/passes/TemperaturePass.h"
 
 #include <memory>
 
@@ -15,6 +16,7 @@ namespace olam
         generator.addPass(std::make_unique<TectonicsPass>());
         generator.addPass(std::make_unique<ElevationPass>());
         generator.addPass(std::make_unique<OceanPass>());
+        generator.addPass(std::make_unique<TemperaturePass>());
     }
 
 } // namespace olam

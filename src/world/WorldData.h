@@ -19,6 +19,8 @@ namespace olam
 
     struct ClimateData
     {
+        // Tenths of a degree Celsius (183 = 18.3 C); annual mean, not an instantaneous value.
+        Layer<std::int16_t> meanAnnualTemperature;
     };
 
     struct HydrologyData
