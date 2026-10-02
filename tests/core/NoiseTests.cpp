@@ -56,6 +56,24 @@ OLAM_TEST(noise_golden_value)
     OLAM_CHECK(noise::gradient(12345, 3.3f, 7.7f) == -0.718187034f);
 }
 
+OLAM_TEST(fractal_sampler_matches_free_functions)
+{
+    const noise::FractalParams params{6, 1.0f / 37.0f, 2.0f, 0.5f};
+    noise::FractalSampler fbmSampler(99, params);
+    noise::FractalSampler ridgedSampler(99, params);
+    // Row-major sweep plus jumps back, so cached and refreshed cells are both exercised.
+    for (int y = -20; y < 60; y += 3)
+    {
+        for (int x = -20; x < 140; x += 1)
+        {
+            const float px = static_cast<float>(x) * 0.73f;
+            const float py = static_cast<float>(y) * 1.31f;
+            OLAM_CHECK(fbmSampler.fbm(px, py) == noise::fbm(99, px, py, params));
+            OLAM_CHECK(ridgedSampler.ridged(px, py) == noise::ridged(99, px, py, params));
+        }
+    }
+}
+
 OLAM_TEST(math_curve_and_smoothstep)
 {
     constexpr std::array<CurvePoint, 3> curve = {{{0.0f, 10.0f}, {10.0f, 20.0f}, {20.0f, 0.0f}}};

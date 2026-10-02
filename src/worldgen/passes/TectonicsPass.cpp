@@ -98,6 +98,9 @@ namespace olam
         const noise::FractalParams warpParams{4, 1.0f / settings.boundaryWarpWavelengthKm, 2.0f, 0.5f};
         const noise::FractalParams rockParams{3, 1.0f / 350.0f, 2.0f, 0.5f};
         const float warpTiles = settings.boundaryWarpKm / tileKm;
+        noise::FractalSampler warpX(warpSeedX, warpParams);
+        noise::FractalSampler warpY(warpSeedY, warpParams);
+        noise::FractalSampler rockNoise(rockSeed, rockParams);
 
         auto &terrain = world.terrain();
         terrain.plateId.resize(width, height, 0);
@@ -113,8 +116,8 @@ namespace olam
                 const std::size_t i = terrain.plateId.index(x, y);
                 const float kmX = (static_cast<float>(x) + 0.5f) * tileKm;
                 const float kmY = (static_cast<float>(y) + 0.5f) * tileKm;
-                const float px = static_cast<float>(x) + 0.5f + warpTiles * noise::fbm(warpSeedX, kmX, kmY, warpParams);
-                const float py = static_cast<float>(y) + 0.5f + warpTiles * noise::fbm(warpSeedY, kmX, kmY, warpParams);
+                const float px = static_cast<float>(x) + 0.5f + warpTiles * warpX.fbm(kmX, kmY);
+                const float py = static_cast<float>(y) + 0.5f + warpTiles * warpY.fbm(kmX, kmY);
 
                 std::size_t nearest = 0;
                 std::size_t second = 1;
@@ -200,7 +203,7 @@ namespace olam
                 const float kmX = (static_cast<float>(x) + 0.5f) * tileKm;
                 const float kmY = (static_cast<float>(y) + 0.5f) * tileKm;
                 terrain.rockType[i] =
-                    noise::fbm(rockSeed, kmX, kmY, rockParams) > 0.2f ? RockType::Metamorphic : RockType::Sedimentary;
+                    rockNoise.fbm(kmX, kmY) > 0.2f ? RockType::Metamorphic : RockType::Sedimentary;
             }
         }
     }

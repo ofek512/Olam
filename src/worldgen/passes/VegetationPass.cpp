@@ -99,6 +99,7 @@ namespace olam
         const auto tileKm = static_cast<float>(world.config().tileSizeMeters / 1000.0);
         const noise::FractalParams params{3, 1.0f / settings.noiseWavelengthKm, 2.0f, 0.5f};
         const std::uint64_t seed = context.seedFor(*this);
+        noise::FractalSampler coverNoise(seed, params);
 
         Layer<VegetationType> vegetation(world.width(), world.height(), VegetationType::None);
         Layer<std::uint8_t> treeCover(world.width(), world.height(), 0);
@@ -114,8 +115,8 @@ namespace olam
                 const float fertility = static_cast<float>(geography.fertility[i]) / 255.0f;
                 constexpr CurvePoint kSlope[] = {{0.0f, 1.0f}, {0.15f, 1.0f}, {0.35f, 0.5f}};
                 const float variation =
-                    1.0f + settings.noiseAmplitude * noise::fbm(seed, (static_cast<float>(x) + 0.5f) * tileKm,
-                                                                (static_cast<float>(y) + 0.5f) * tileKm, params);
+                    1.0f + settings.noiseAmplitude * coverNoise.fbm((static_cast<float>(x) + 0.5f) * tileKm,
+                                                                    (static_cast<float>(y) + 0.5f) * tileKm);
                 const float cover = std::clamp(potentialTreeCover(biome) * lerp(0.7f, 1.15f, clamp01(aridity / 1.2f)) *
                                                    (0.6f + 0.4f * fertility) * evaluateCurve(kSlope, slopeAt(world, {x, y})) *
                                                    variation,

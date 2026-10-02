@@ -27,6 +27,7 @@ namespace olam
         const auto tileKm = static_cast<float>(world.config().tileSizeMeters / 1000.0);
         const noise::FractalParams params{3, 1.0f / settings.textureNoiseWavelengthKm, 2.0f, 0.5f};
         const std::uint64_t seed = context.seedFor(*this);
+        noise::FractalSampler textureNoise(seed, params);
 
         auto &soil = world.geography().soil;
         soil.resize(world.width(), world.height(), SoilType::None);
@@ -76,8 +77,8 @@ namespace olam
                     const float rockBias = rock == RockType::Sedimentary ? 0.2f : (rock == RockType::Igneous ? -0.2f : 0.0f);
                     const float moistureBias = 0.3f * (aridity - 0.6f);
                     const float variation = settings.textureNoise *
-                                            noise::fbm(seed, (static_cast<float>(x) + 0.5f) * tileKm,
-                                                       (static_cast<float>(y) + 0.5f) * tileKm, params);
+                                            textureNoise.fbm((static_cast<float>(x) + 0.5f) * tileKm,
+                                                             (static_cast<float>(y) + 0.5f) * tileKm);
                     const float texture = rockBias + moistureBias + variation;
                     if (texture > 0.35f)
                         type = SoilType::Clay;

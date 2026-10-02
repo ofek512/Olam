@@ -25,6 +25,7 @@ olam_core ──> olam_world ──> olam_worldgen        (SDL-free, headless-bu
 olam_world + olam_engine ──> olam_world_viewer (tools/world_viewer)
                                    │
 olam_worldgen + olam_world_viewer ──> Olam (src/app, thin executable)
+olam_worldgen ──> olam_generate (src/tools/generate, headless CLI)
 ```
 
 - `olam_core`: generic infrastructure only (no SDL, no world knowledge): logging, time, input state, files,
@@ -34,6 +35,8 @@ olam_worldgen + olam_world_viewer ──> Olam (src/app, thin executable)
 - `olam_engine`: SDL platform layer, renderer, textures, debug text panels.
 - `olam_world_viewer`: world debug visualization and tile inspector.
 - `Olam`: composes systems; contains no world logic.
+- `olam_generate`: headless generation (`--seed`, `--size`, `--save`) printing per-pass timings, stats and the world
+  hash; used for profiling and on machines without a display.
 
 CMake options: `OLAM_BUILD_ENGINE` (SDL targets, default ON) and `OLAM_BUILD_TESTS` (default ON).
 With `OLAM_BUILD_ENGINE=OFF` SDL is not fetched; if `olam_worldgen` then fails to build, a layering rule was broken.
@@ -74,6 +77,9 @@ Rule of thumb: if saving and reloading the world requires the data, `World` owns
 - A static layer descriptor table (name, type, units, hash) lets debug views, hashing and saving enumerate layers.
 - **No persistent layer exists before the pass that produces it.**
 - Persistent layers use the smallest sensible integer representation (see WORLD_GENERATION.md).
+- Saving (`world/WorldIO`) writes config, seed, every present layer (by `LayerId`) and the entity lists, followed
+  by the world hash; loading validates all of it and returns errors for bad files. Entity serialization is shared
+  with the world hash, so anything saved is also hashed.
 
 ## IDs and entities
 

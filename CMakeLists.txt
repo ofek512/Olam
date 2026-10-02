@@ -120,6 +120,10 @@ target_link_libraries(olam_worldgen
     PRIVATE olam_warnings
 )
 
+# Headless world generator (timings, stats, saving); no SDL.
+add_executable(olam_generate src/tools/generate/main.cpp)
+target_link_libraries(olam_generate PRIVATE olam_worldgen olam_warnings)
+
 # ---------------------------------------------------------------------------
 # SDL-dependent targets
 # ---------------------------------------------------------------------------

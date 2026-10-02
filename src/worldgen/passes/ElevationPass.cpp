@@ -180,6 +180,8 @@ namespace olam
         const std::uint64_t ridgeSeed = deriveSeed(seed, olam::seedId("RIDGES"));
         const noise::FractalParams detailParams{settings.noiseOctaves, 1.0f / settings.noiseWavelengthKm, 2.0f, 0.5f};
         const noise::FractalParams ridgeParams{4, 1.0f / 300.0f, 2.0f, 0.5f};
+        noise::FractalSampler detailNoise(detailSeed, detailParams);
+        noise::FractalSampler ridgeNoise(ridgeSeed, ridgeParams);
 
         Layer<float> raw(width, height);
         for (int y = 0; y < height; ++y)
@@ -189,10 +191,10 @@ namespace olam
                 const std::size_t i = raw.index(x, y);
                 const float kmX = (static_cast<float>(x) + 0.5f) * tileKm;
                 const float kmY = (static_cast<float>(y) + 0.5f) * tileKm;
-                float h = base[i] + settings.noiseStrength * noise::fbm(detailSeed, kmX, kmY, detailParams);
+                float h = base[i] + settings.noiseStrength * detailNoise.fbm(kmX, kmY);
                 if (uplift[i] > 0.0f)
                 {
-                    const float ridges = 0.35f + 0.65f * noise::ridged(ridgeSeed, kmX, kmY, ridgeParams);
+                    const float ridges = 0.35f + 0.65f * ridgeNoise.ridged(kmX, kmY);
                     h += settings.mountainStrength * uplift[i] * ridges;
                 }
                 h -= settings.riftStrength * rift[i];

@@ -117,6 +117,7 @@ namespace olam
         boxBlur(intensity, std::max(1, static_cast<int>(settings.blurKm / tileKm * 0.5f)), 2);
 
         const noise::FractalParams noiseParams{3, 1.0f / settings.noiseWavelengthKm, 2.0f, 0.5f};
+        noise::FractalSampler rainNoise(seed, noiseParams);
         auto &climate = world.climate();
         climate.annualRainfall.resize(width, height, 0);
         climate.moisture.resize(width, height, 0);
@@ -128,7 +129,7 @@ namespace olam
                 const std::size_t i = intensity.index(x, y);
                 const float kmX = (static_cast<float>(x) + 0.5f) * tileKm;
                 const float kmY = (static_cast<float>(y) + 0.5f) * tileKm;
-                const float variation = 1.0f + settings.noiseAmplitude * noise::fbm(seed, kmX, kmY, noiseParams);
+                const float variation = 1.0f + settings.noiseAmplitude * rainNoise.fbm(kmX, kmY);
                 const float mm = std::clamp(intensity[i] * settings.mmScale * belt * variation, 0.0f, 65535.0f);
                 climate.annualRainfall[i] = static_cast<std::uint16_t>(std::floor(mm + 0.5f));
 

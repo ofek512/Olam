@@ -203,7 +203,11 @@ other intermediate layers.
   invalid `World`. Viewer: Ctrl+S saves to `saves/<seed>.olamworld`, Ctrl+L reloads the last save,
   `--load <file>` loads at startup (falls back to generation on error).
 - Tests: invariants per pass, determinism, pinned golden hashes for a small world, save/load round trip.
-- Budget: a 2048² world (all passes) should generate in about 3 s in a Release build.
+  Golden hashes (`tests/worldgen/GoldenHashTests.cpp`, seed 12345, 256²) print the new table on mismatch; update
+  them only for intended generation changes.
+- Budget: a 2048² world (all passes) should generate in about 3 s in a Release build. Measured with
+  `olam_generate --seed 7 --size 2048x2048`: ~2.5 s (MSVC Release). Per-tile noise uses `noise::FractalSampler`,
+  which caches lattice corners per octave (bit-identical to `fbm` / `ridged`).
 
 ## Debug viewer
 

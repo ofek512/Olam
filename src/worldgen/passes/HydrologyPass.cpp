@@ -200,14 +200,15 @@ namespace olam
             const auto tileKm = static_cast<float>(world.config().tileSizeMeters / 1000.0);
             const noise::FractalParams params{3, 1.0f / settings.routingNoiseWavelengthKm, 2.0f, 0.5f};
             const std::uint64_t seed = context.seedFor(*this);
+            noise::FractalSampler routingNoise(seed, params);
             std::vector<std::int32_t> routing(tileCount, 0);
             for (std::size_t i = 0; i < tileCount; ++i)
             {
                 if (water[i] != SurfaceWater::Land)
                     continue;
                 const WorldCoord coord = world.coordFromIndex(i);
-                const float n = noise::fbm(seed, (static_cast<float>(coord.x) + 0.5f) * tileKm,
-                                           (static_cast<float>(coord.y) + 0.5f) * tileKm, params);
+                const float n = routingNoise.fbm((static_cast<float>(coord.x) + 0.5f) * tileKm,
+                                                 (static_cast<float>(coord.y) + 0.5f) * tileKm);
                 routing[i] = filled[i] * 10 + static_cast<std::int32_t>(std::floor(n * settings.routingNoiseM * 10.0f + 0.5f));
             }
             std::vector<std::int32_t> routedFill;

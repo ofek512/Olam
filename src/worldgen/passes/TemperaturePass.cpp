@@ -47,6 +47,7 @@ namespace olam
         const auto &distance = world.hydrology().distanceToOceanKm;
         const auto tileKm = static_cast<float>(world.config().tileSizeMeters / 1000.0);
         const noise::FractalParams noiseParams{3, 1.0f / settings.noiseWavelengthKm, 2.0f, 0.5f};
+        noise::FractalSampler temperatureNoise(seed, noiseParams);
 
         auto &temperature = world.climate().meanAnnualTemperature;
         temperature.resize(world.width(), world.height(), 0);
@@ -67,7 +68,7 @@ namespace olam
                 const float kmY = (static_cast<float>(y) + 0.5f) * tileKm;
 
                 const float celsius = seaLevelTemperature - settings.lapseRatePerKm * altitudeKm - continentality * inland +
-                                      settings.noiseAmplitude * noise::fbm(seed, kmX, kmY, noiseParams);
+                                      settings.noiseAmplitude * temperatureNoise.fbm(kmX, kmY);
                 const float tenths = std::clamp(std::floor(celsius * 10.0f + 0.5f), -800.0f, 600.0f);
                 temperature[i] = static_cast<std::int16_t>(tenths);
             }

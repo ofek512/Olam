@@ -26,6 +26,33 @@ namespace olam
             }
         }
 
+        // Same arithmetic per column as blurLine (identical results), but walks memory row by row.
+        void blurColumns(const float *src, float *dst, int width, int height, int radius)
+        {
+            const double window = 2.0 * radius + 1.0;
+            const auto w = static_cast<std::size_t>(width);
+            auto row = [&](int y)
+            { return src + static_cast<std::size_t>(std::clamp(y, 0, height - 1)) * w; };
+
+            std::vector<double> sums(w, 0.0);
+            for (int i = -radius; i <= radius; ++i)
+            {
+                const float *values = row(i);
+                for (std::size_t x = 0; x < w; ++x)
+                    sums[x] += static_cast<double>(values[x]);
+            }
+            for (int y = 0; y < height; ++y)
+            {
+                float *out = dst + static_cast<std::size_t>(y) * w;
+                for (std::size_t x = 0; x < w; ++x)
+                    out[x] = static_cast<float>(sums[x] / window);
+                const float *entering = row(y + radius + 1);
+                const float *leaving = row(y - radius);
+                for (std::size_t x = 0; x < w; ++x)
+                    sums[x] += static_cast<double>(entering[x]) - static_cast<double>(leaving[x]);
+            }
+        }
+
     } // namespace
 
     void boxBlur(Layer<float> &layer, int radius, int passes)
@@ -41,9 +68,7 @@ namespace olam
             for (int y = 0; y < height; ++y)
                 blurLine(layer.data(), scratch.data(), static_cast<std::size_t>(y) * static_cast<std::size_t>(width), 1, width,
                          radius);
-            for (int x = 0; x < width; ++x)
-                blurLine(scratch.data(), layer.data(), static_cast<std::size_t>(x), static_cast<std::size_t>(width), height,
-                         radius);
+            blurColumns(scratch.data(), layer.data(), width, height, radius);
         }
     }
 
