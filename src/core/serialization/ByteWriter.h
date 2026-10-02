@@ -58,6 +58,8 @@ namespace olam
 
         std::span<const std::uint8_t> bytes() const { return m_bytes; }
         std::size_t size() const { return m_bytes.size(); }
+        // Moves the buffer out; the writer is empty afterwards.
+        std::vector<std::uint8_t> takeBytes() { return std::move(m_bytes); }
 
         std::uint64_t hash(std::uint64_t seed = 0) const { return xxHash64Bytes(m_bytes.data(), m_bytes.size(), seed); }
 

@@ -3,6 +3,7 @@
 #include "core/hash/LayerHash.h"
 #include "core/serialization/ByteWriter.h"
 #include "world/World.h"
+#include "world/WorldIO.h"
 #include "world/WorldLayers.h"
 
 namespace olam
@@ -33,37 +34,7 @@ namespace olam
         if (!hydrology.flowDirection.empty())
         {
             ByteWriter entities;
-            entities.write(static_cast<std::uint32_t>(hydrology.rivers.size()));
-            for (const River &river : hydrology.rivers)
-            {
-                entities.write(river.id);
-                entities.write(static_cast<std::uint32_t>(river.path.size()));
-                for (const WorldCoord tile : river.path)
-                {
-                    entities.write(tile.x);
-                    entities.write(tile.y);
-                }
-                entities.write(river.mouthDischarge);
-                entities.write(river.endsIn);
-                entities.write(river.flowsInto);
-                entities.write(river.lake);
-                entities.write(static_cast<std::uint32_t>(river.tributaries.size()));
-                for (const RiverId tributary : river.tributaries)
-                    entities.write(tributary);
-            }
-            entities.write(static_cast<std::uint32_t>(hydrology.lakes.size()));
-            for (const Lake &lake : hydrology.lakes)
-            {
-                entities.write(lake.id);
-                entities.write(lake.surfaceElevation);
-                entities.write(lake.tileCount);
-                entities.write(lake.outlet.x);
-                entities.write(lake.outlet.y);
-                entities.write(lake.outflow);
-                entities.write(static_cast<std::uint32_t>(lake.inflows.size()));
-                for (const RiverId inflow : lake.inflows)
-                    entities.write(inflow);
-            }
+            writeHydrologyEntities(entities, hydrology);
             const std::uint64_t entityHash = entities.hash();
             result.layers.push_back({"Rivers + lakes", entityHash});
             writer.write(entityHash);
@@ -73,16 +44,7 @@ namespace olam
         if (!resources.depositId.empty())
         {
             ByteWriter entities;
-            entities.write(static_cast<std::uint32_t>(resources.deposits.size()));
-            for (const Deposit &deposit : resources.deposits)
-            {
-                entities.write(deposit.id);
-                entities.write(deposit.mineral);
-                entities.write(deposit.center.x);
-                entities.write(deposit.center.y);
-                entities.write(deposit.tileCount);
-                entities.write(deposit.richness);
-            }
+            writeResourceEntities(entities, resources);
             const std::uint64_t entityHash = entities.hash();
             result.layers.push_back({"Deposits", entityHash});
             writer.write(entityHash);

@@ -5,9 +5,11 @@
 #include "render/renderer/Renderer.h"
 #include "tools/world_viewer/TileInspector.h"
 #include "tools/world_viewer/WorldDebugRenderer.h"
+#include "world/WorldIO.h"
 #include "world/WorldStats.h"
 #include "worldgen/DefaultPipeline.h"
 
+#include <chrono>
 #include <cmath>
 #include <format>
 #include <random>
@@ -63,7 +65,9 @@ namespace olam
         m_renderer = std::make_unique<Renderer>(m_platform.renderer());
         m_worldRenderer = std::make_unique<WorldDebugRenderer>();
 
-        if (!generateWorld(m_config.seed.value_or(randomSeed())))
+        if (m_config.loadPath && !loadWorldFile(*m_config.loadPath))
+            logging::warn(LogCategory::Core, "Generating a new world instead");
+        if (!m_world && !generateWorld(m_config.seed.value_or(randomSeed())))
             return false;
 
         m_camera.setViewportSize(m_renderer->outputSize());
@@ -117,6 +121,42 @@ namespace olam
         onWorldChanged();
         logging::info(LogCategory::Core, "World seed {} ({} x {})", seed, m_world->width(), m_world->height());
         return true;
+    }
+
+    bool Application::loadWorldFile(const std::filesystem::path &path)
+    {
+        const auto start = std::chrono::steady_clock::now();
+        WorldLoadResult result = loadWorld(path);
+        if (!result.world)
+        {
+            logging::error(LogCategory::Core, "Load failed: {}", result.error);
+            return false;
+        }
+
+        m_world = std::move(result.world);
+        // R regenerates with the loaded world's settings.
+        m_config.world = m_world->config();
+        m_lastSavePath = path;
+        onWorldChanged();
+        m_camera.fitTo({0.0f, 0.0f, static_cast<float>(m_world->width()), static_cast<float>(m_world->height())});
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+        logging::info(LogCategory::Core, "Loaded '{}' (seed {}, {} x {}) in {:.0f} ms", path.string(), m_world->seed(),
+                      m_world->width(), m_world->height(), ms);
+        return true;
+    }
+
+    void Application::saveCurrentWorld()
+    {
+        const std::filesystem::path path = std::filesystem::path("saves") / std::format("{}.olamworld", m_world->seed());
+        const auto start = std::chrono::steady_clock::now();
+        if (auto error = saveWorld(*m_world, path))
+        {
+            logging::error(LogCategory::Core, "Save failed: {}", *error);
+            return;
+        }
+        m_lastSavePath = path;
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+        logging::info(LogCategory::Core, "Saved '{}' in {:.0f} ms", path.string(), ms);
     }
 
     void Application::onWorldChanged()
@@ -182,6 +222,16 @@ namespace olam
         if (m_input.wasPressed(Key::I))
             m_showStats = !m_showStats;
 
+        const bool ctrl = m_input.isDown(Key::LeftCtrl) || m_input.isDown(Key::RightCtrl);
+        if (ctrl && m_input.wasPressed(Key::S))
+            saveCurrentWorld();
+        if (ctrl && m_input.wasPressed(Key::L))
+        {
+            const std::filesystem::path path =
+                m_lastSavePath.value_or(std::filesystem::path("saves") / std::format("{}.olamworld", m_world->seed()));
+            loadWorldFile(path);
+        }
+
         if (m_input.wasPressed(MouseButton::Left))
         {
             const Vec2 mouseWorld = m_camera.screenToWorld(m_input.mousePosition());
@@ -211,9 +261,11 @@ namespace olam
     void Application::updateCamera(double deltaTime)
     {
         Vec2 direction;
+        // Ctrl+S / Ctrl+L are commands, not camera movement.
+        const bool ctrl = m_input.isDown(Key::LeftCtrl) || m_input.isDown(Key::RightCtrl);
         if (m_input.isDown(Key::W) || m_input.isDown(Key::Up))
             direction.y -= 1.0f;
-        if (m_input.isDown(Key::S) || m_input.isDown(Key::Down))
+        if ((m_input.isDown(Key::S) && !ctrl) || m_input.isDown(Key::Down))
             direction.y += 1.0f;
         if (m_input.isDown(Key::A) || m_input.isDown(Key::Left))
             direction.x -= 1.0f;
@@ -279,7 +331,7 @@ namespace olam
             "WASD/Arrows move  Shift fast  Wheel zoom  MMB drag",
             "R regenerate  N new seed  Tab/F1-F12 views  H shade",
             "LMB pin tile  I stats  Space pause  . step",
-            "` overlay  Esc quit",
+            "Ctrl+S save  Ctrl+L load  ` overlay  Esc quit",
         };
         drawTextPanel(*m_renderer, {4.0f, 4.0f}, lines);
 

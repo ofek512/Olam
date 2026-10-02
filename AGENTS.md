@@ -49,6 +49,7 @@ cmake -S . -B build
 cmake --build build --config Debug
 ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\Olam.exe --seed 12345 --size 1024x512
+.\build\Debug\Olam.exe --load saves\12345.olamworld   # Ctrl+S saves, Ctrl+L reloads
 ```
 
 Headless (no SDL, as in Linux CI): `cmake -S . -B build-headless -DOLAM_BUILD_ENGINE=OFF`.

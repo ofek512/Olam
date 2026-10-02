@@ -83,6 +83,7 @@ add_library(olam_world STATIC
     src/world/WorldHash.cpp
     src/world/WorldStats.cpp
     src/world/WorldTypes.cpp
+    src/world/WorldIO.cpp
     src/world/queries/TerrainQueries.cpp
     src/world/queries/HydrologyQueries.cpp
     src/world/queries/AgricultureQueries.cpp

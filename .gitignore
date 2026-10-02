@@ -4,6 +4,10 @@ build-*/
 cmake-build-*/
 out/
 
+# Saved worlds
+saves/
+*.olamworld
+
 # CMake generated files
 CMakeCache.txt
 CMakeFiles/

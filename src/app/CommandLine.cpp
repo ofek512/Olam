@@ -60,6 +60,15 @@ namespace olam
                 options.worldWidth = width;
                 options.worldHeight = height;
             }
+            else if (arg == "--load")
+            {
+                if (!hasValue)
+                {
+                    options.errors.push_back("--load requires a file path");
+                    continue;
+                }
+                options.loadPath = argv[++i];
+            }
             else
             {
                 options.errors.push_back("unknown argument '" + std::string(arg) + "'");

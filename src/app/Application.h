@@ -11,6 +11,7 @@
 #include "worldgen/WorldGenerator.h"
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
@@ -28,6 +29,8 @@ namespace olam
         WorldConfig world;
         // Random seed when empty.
         std::optional<std::uint64_t> seed;
+        // World file to load at startup instead of generating.
+        std::optional<std::filesystem::path> loadPath;
         double simulationTicksPerSecond = 20.0;
         int maxSimulationTicksPerFrame = 5;
     };
@@ -52,6 +55,8 @@ namespace olam
 
         void updateCamera(double deltaTime);
         bool generateWorld(std::uint64_t seed);
+        bool loadWorldFile(const std::filesystem::path &path);
+        void saveCurrentWorld();
         void onWorldChanged();
         void selectView(WorldView view);
         void drawOverlay();
@@ -71,6 +76,7 @@ namespace olam
         ViewOptions m_viewOptions;
         std::optional<WorldCoord> m_pinnedTile;
         std::vector<std::string> m_statsLines;
+        std::optional<std::filesystem::path> m_lastSavePath;
 
         bool m_running = false;
         bool m_showDebugOverlay = true;

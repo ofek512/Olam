@@ -12,6 +12,7 @@ int main(int argc, char *argv[])
 
     olam::ApplicationConfig config;
     config.seed = options.seed;
+    config.loadPath = options.loadPath;
     if (options.worldWidth && options.worldHeight)
     {
         olam::WorldConfig world = config.world;

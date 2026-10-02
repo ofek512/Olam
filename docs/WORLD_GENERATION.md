@@ -198,7 +198,10 @@ other intermediate layers.
 - After generation a summary is logged (land/ocean/lake share, biomes, rivers, lakes, deposits) and shown in the
   viewer stats panel (I).
 - Worlds are saved in an own versioned, uncompressed binary format (`.olamworld`): header, config, seed, layers
-  via the descriptor table, entities, trailing world hash verified on load.
+  via the descriptor table, entities, trailing world hash verified on load. Implemented in `world/WorldIO`:
+  every count, size, enum value and id reference is validated, so corrupt files produce an error, never an
+  invalid `World`. Viewer: Ctrl+S saves to `saves/<seed>.olamworld`, Ctrl+L reloads the last save,
+  `--load <file>` loads at startup (falls back to generation on error).
 - Tests: invariants per pass, determinism, pinned golden hashes for a small world, save/load round trip.
 - Budget: a 2048² world (all passes) should generate in about 3 s in a Release build.
 

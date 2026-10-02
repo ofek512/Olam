@@ -35,7 +35,7 @@ Short status checklist. Full vision and rationale: [agent.MD](../agent.MD).
 - [x] 3H Vegetation
 - [x] 3I Resources
 - [x] Debug views, tile inspector with real data, generation statistics
-- [ ] Save / load generated world
+- [x] Save / load generated world
 - [ ] Golden hashes, performance check (2048² ≤ ~3 s Release)
 
 ## Phase 4 — Civilization foundations (= Milestone 2)
