@@ -165,4 +165,32 @@ namespace olam
         return "?";
     }
 
+    std::string_view toString(MineralType mineral)
+    {
+        switch (mineral)
+        {
+        case MineralType::Iron:
+            return "Iron";
+        case MineralType::Copper:
+            return "Copper";
+        case MineralType::Tin:
+            return "Tin";
+        case MineralType::Coal:
+            return "Coal";
+        case MineralType::Gold:
+            return "Gold";
+        case MineralType::Silver:
+            return "Silver";
+        case MineralType::Stone:
+            return "Stone";
+        case MineralType::Clay:
+            return "Clay";
+        case MineralType::Salt:
+            return "Salt";
+        case MineralType::Count:
+            break;
+        }
+        return "?";
+    }
+
 } // namespace olam

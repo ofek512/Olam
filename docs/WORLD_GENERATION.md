@@ -186,7 +186,12 @@ other intermediate layers.
 
 - Minerals (iron, copper, tin, coal, gold, silver, stone, clay, salt): a probability field per mineral
   (geology × terrain × regional noise) is sampled with PCG and minimum spacing into `Deposit` clusters with a
-  richness. Wood, game and fish are derived from existing layers.
+  richness. Wood, game and fish are derived from existing layers. Per mineral: a rock-type × terrain-class table
+  (plus clay soils for clay, aridity for salt) times a province noise field; PCG (seed per mineral) draws
+  candidate tiles accepted with that probability, same-mineral deposits keep a minimum spacing, and each accepted
+  centre grows into a 3-12 tile cluster over similarly suitable land. Base densities (per million km² of land):
+  iron 40, copper 25, tin 8, coal 30, gold 8, silver 10, stone 60, clay 50, salt 15. Yields:
+  `world/queries/ResourceQueries`.
 
 ## Statistics, saving and tests
 

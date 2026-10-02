@@ -150,6 +150,18 @@ namespace olam
                                         static_cast<double>(sum) / landCount / 2.55,
                                         100.0 * static_cast<double>(prime) / landCount));
         }
+
+        const ResourceData &resources = world.resources();
+        if (!resources.depositId.empty())
+        {
+            std::size_t counts[static_cast<std::size_t>(MineralType::Count)] = {};
+            for (const Deposit &deposit : resources.deposits)
+                ++counts[static_cast<std::size_t>(deposit.mineral)];
+            std::string line = std::format("Deposits {}  ", resources.deposits.size());
+            for (std::size_t m = 0; m < static_cast<std::size_t>(MineralType::Count); ++m)
+                line += std::format(" {} {}", toString(static_cast<MineralType>(m)), counts[m]);
+            lines.push_back(line);
+        }
         return lines;
     }
 

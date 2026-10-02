@@ -114,4 +114,20 @@ namespace olam
 
     std::string_view toString(VegetationType vegetation);
 
+    enum class MineralType : std::uint8_t
+    {
+        Iron,
+        Copper,
+        Tin,
+        Coal,
+        Gold,
+        Silver,
+        Stone,
+        Clay,
+        Salt,
+        Count,
+    };
+
+    std::string_view toString(MineralType mineral);
+
 } // namespace olam

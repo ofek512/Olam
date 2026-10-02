@@ -7,6 +7,7 @@
 #include "worldgen/passes/HydrologyPass.h"
 #include "worldgen/passes/OceanPass.h"
 #include "worldgen/passes/RainfallPass.h"
+#include "worldgen/passes/ResourcePass.h"
 #include "worldgen/passes/SoilPass.h"
 #include "worldgen/passes/VegetationPass.h"
 #include "worldgen/passes/TectonicsPass.h"
@@ -29,6 +30,7 @@ namespace olam
         generator.addPass(std::make_unique<BiomePass>());
         generator.addPass(std::make_unique<FertilityPass>());
         generator.addPass(std::make_unique<VegetationPass>());
+        generator.addPass(std::make_unique<ResourcePass>());
     }
 
 } // namespace olam

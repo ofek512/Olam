@@ -33,7 +33,7 @@ Short status checklist. Full vision and rationale: [agent.MD](../agent.MD).
 - [x] 3F Biomes
 - [x] 3G Fertility
 - [x] 3H Vegetation
-- [ ] 3I Resources
+- [x] 3I Resources
 - [ ] Debug views, tile inspector with real data, generation statistics
 - [ ] Save / load generated world
 - [ ] Golden hashes, performance check (2048² ≤ ~3 s Release)

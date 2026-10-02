@@ -86,6 +86,7 @@ add_library(olam_world STATIC
     src/world/queries/TerrainQueries.cpp
     src/world/queries/HydrologyQueries.cpp
     src/world/queries/AgricultureQueries.cpp
+    src/world/queries/ResourceQueries.cpp
 )
 target_link_libraries(olam_world
     PUBLIC olam_core
@@ -111,6 +112,7 @@ add_library(olam_worldgen STATIC
     src/worldgen/passes/BiomePass.cpp
     src/worldgen/passes/FertilityPass.cpp
     src/worldgen/passes/VegetationPass.cpp
+    src/worldgen/passes/ResourcePass.cpp
 )
 target_link_libraries(olam_worldgen
     PUBLIC olam_world

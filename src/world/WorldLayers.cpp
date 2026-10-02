@@ -29,6 +29,7 @@ namespace olam
             {LayerId::Fertility, "Fertility", "%"},
             {LayerId::Vegetation, "Vegetation", ""},
             {LayerId::TreeCover, "Tree cover", "%"},
+            {LayerId::DepositId, "Deposit", ""},
         };
 
         constexpr std::string_view kDirectionNames[] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
@@ -111,6 +112,15 @@ namespace olam
             return std::string(toString(world.geography().vegetation[index]));
         case LayerId::TreeCover:
             return std::format("{} %", world.geography().treeCover[index]);
+        case LayerId::DepositId:
+        {
+            const DepositId depositId = world.resources().depositId[index];
+            if (!depositId.isValid())
+                return "-";
+            const Deposit &deposit = world.resources().deposits[depositId.index()];
+            return std::format("#{} {} (richness {} %, {} tiles)", depositId.value, toString(deposit.mineral),
+                               deposit.richness, deposit.tileCount);
+        }
         case LayerId::Count:
             break;
         }

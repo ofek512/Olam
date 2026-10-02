@@ -96,6 +96,11 @@ namespace olam
         const auto &vegetation = settings.vegetation;
         if (!(vegetation.noiseAmplitude >= 0.0f && vegetation.noiseAmplitude < 1.0f && vegetation.noiseWavelengthKm > 0.0f))
             return "vegetation settings out of range";
+        const auto &resources = settings.resources;
+        if (!(resources.densityScale >= 0.0f && resources.densityScale <= 100.0f && resources.minSpacingKm >= 0.0f &&
+              resources.provinceWavelengthKm > 0.0f && resources.minDepositTiles >= 1 &&
+              resources.maxDepositTiles >= resources.minDepositTiles && resources.maxDepositTiles <= 1000))
+            return "resource settings out of range";
         return std::nullopt;
     }
 

@@ -31,5 +31,6 @@ olam_add_test_executable(olam_worldgen_tests
     worldgen/OceanTests.cpp
     worldgen/ClimateTests.cpp
     worldgen/HydrologyTests.cpp
+    worldgen/ResourceTests.cpp
 )
 target_link_libraries(olam_worldgen_tests PRIVATE olam_worldgen)

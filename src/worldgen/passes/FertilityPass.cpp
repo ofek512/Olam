@@ -17,15 +17,13 @@ namespace olam
 
         float temperatureFactor(float celsius)
         {
-            constexpr CurvePoint kCurve[] = {{-5.0f, 0.0f}, {0.0f, 0.2f},   {5.0f, 0.6f},  {10.0f, 0.95f},
-                                             {15.0f, 1.0f}, {22.0f, 0.95f}, {28.0f, 0.75f}};
+            constexpr CurvePoint kCurve[] = {{-5.0f, 0.0f}, {0.0f, 0.2f}, {5.0f, 0.6f}, {10.0f, 0.95f}, {15.0f, 1.0f}, {22.0f, 0.95f}, {28.0f, 0.75f}};
             return evaluateCurve(kCurve, celsius);
         }
 
         float moistureFactor(float aridity)
         {
-            constexpr CurvePoint kCurve[] = {{0.0f, 0.0f}, {0.1f, 0.1f},  {0.3f, 0.45f}, {0.6f, 0.85f},
-                                             {1.0f, 1.0f}, {1.6f, 0.85f}, {2.0f, 0.7f}};
+            constexpr CurvePoint kCurve[] = {{0.0f, 0.0f}, {0.1f, 0.1f}, {0.3f, 0.45f}, {0.6f, 0.85f}, {1.0f, 1.0f}, {1.6f, 0.85f}, {2.0f, 0.7f}};
             return evaluateCurve(kCurve, aridity);
         }
 

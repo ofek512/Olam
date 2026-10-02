@@ -141,6 +141,18 @@ namespace olam
         float noiseWavelengthKm = 40.0f;
     };
 
+    struct ResourceSettings
+    {
+        // Multiplies every mineral's base deposit density (deposits per million km^2 of land).
+        float densityScale = 1.0f;
+        // Minimum distance between two deposits of the same mineral.
+        float minSpacingKm = 40.0f;
+        // Size of mineral provinces (regional noise).
+        float provinceWavelengthKm = 300.0f;
+        std::int32_t minDepositTiles = 3;
+        std::int32_t maxDepositTiles = 12;
+    };
+
     // Tuning values for every generation pass. Part of WorldConfig, so they are validated, hashed and saved.
     // Each pass adds its own group when it is implemented.
     struct WorldGenSettings
@@ -155,6 +167,7 @@ namespace olam
         BiomeSettings biome;
         FertilitySettings fertility;
         VegetationSettings vegetation;
+        ResourceSettings resources;
     };
 
     // Calls visit(field) for every setting in a fixed order (hashing, saving, loading).
@@ -244,6 +257,13 @@ namespace olam
         auto &vegetation = settings.vegetation;
         visit(vegetation.noiseAmplitude);
         visit(vegetation.noiseWavelengthKm);
+
+        auto &resources = settings.resources;
+        visit(resources.densityScale);
+        visit(resources.minSpacingKm);
+        visit(resources.provinceWavelengthKm);
+        visit(resources.minDepositTiles);
+        visit(resources.maxDepositTiles);
     }
 
     std::optional<std::string> validateGenerationSettings(const WorldGenSettings &settings);

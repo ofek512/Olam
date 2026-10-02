@@ -46,6 +46,8 @@ namespace olam
         const HydrologyData &hydrology() const { return m_hydrology; }
         GeographyData &geography() { return m_geography; }
         const GeographyData &geography() const { return m_geography; }
+        ResourceData &resources() { return m_resources; }
+        const ResourceData &resources() const { return m_resources; }
 
     private:
         WorldConfig m_config;
@@ -54,6 +56,7 @@ namespace olam
         ClimateData m_climate;
         HydrologyData m_hydrology;
         GeographyData m_geography;
+        ResourceData m_resources;
     };
 
 } // namespace olam

@@ -31,6 +31,7 @@ namespace olam
         Fertility,
         Vegetation,
         TreeCover,
+        DepositId,
         Count,
     };
 
@@ -100,6 +101,9 @@ namespace olam
             break;
         case LayerId::TreeCover:
             f(world.geography().treeCover);
+            break;
+        case LayerId::DepositId:
+            f(world.resources().depositId);
             break;
         case LayerId::Count:
             break;

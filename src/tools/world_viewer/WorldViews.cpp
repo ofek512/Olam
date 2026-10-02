@@ -256,6 +256,47 @@ namespace olam
             {70, 130, 120},  // Wetland
         }};
 
+        constexpr std::array<Rgb, static_cast<std::size_t>(MineralType::Count)> kMineralColors = {{
+            {190, 60, 30},   // Iron
+            {40, 180, 160},  // Copper
+            {120, 140, 220}, // Tin
+            {20, 20, 20},    // Coal
+            {250, 200, 30},  // Gold
+            {235, 235, 245}, // Silver
+            {150, 90, 200},  // Stone
+            {215, 120, 70},  // Clay
+            {255, 140, 200}, // Salt
+        }};
+
+        // Deposits by mineral over muted grey land.
+        void colorizeResources(const World &world, const ViewOptions &options, std::span<std::uint8_t> rgba)
+        {
+            const auto &resources = world.resources();
+            const auto &elevation = world.terrain().elevation;
+            for (int y = 0; y < world.height(); ++y)
+            {
+                for (int x = 0; x < world.width(); ++x)
+                {
+                    const std::size_t i = elevation.index(x, y);
+                    if (isWater(world, i))
+                    {
+                        writePixel(rgba, i, {25, 35, 60});
+                        continue;
+                    }
+                    const DepositId deposit = resources.depositId[i];
+                    if (deposit.isValid())
+                    {
+                        writePixel(rgba, i, kMineralColors[static_cast<std::size_t>(resources.deposits[deposit.index()].mineral)]);
+                        continue;
+                    }
+                    Rgb color{120, 120, 115};
+                    if (options.hillshade)
+                        color = scale(color, hillshade(world, x, y));
+                    writePixel(rgba, i, color);
+                }
+            }
+        }
+
         constexpr std::array<Rgb, static_cast<std::size_t>(SoilType::Count)> kSoilColors = {{
             {30, 45, 80},    // None (water)
             {125, 120, 115}, // Rocky
@@ -382,6 +423,8 @@ namespace olam
             return !world.geography().vegetation.empty();
         case WorldView::TreeCover:
             return !world.geography().treeCover.empty();
+        case WorldView::Resources:
+            return !world.resources().depositId.empty();
         case WorldView::HashDebug:
             return true;
         default:
@@ -469,6 +512,9 @@ namespace olam
         }
         case WorldView::Vegetation:
             colorizeCategories(world, world.geography().vegetation, kVegetationColors, options, rgba);
+            break;
+        case WorldView::Resources:
+            colorizeResources(world, options, rgba);
             break;
         case WorldView::TreeCover:
         {

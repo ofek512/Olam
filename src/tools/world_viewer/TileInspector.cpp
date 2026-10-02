@@ -4,6 +4,7 @@
 #include "world/World.h"
 #include "world/WorldLayers.h"
 #include "world/queries/AgricultureQueries.h"
+#include "world/queries/ResourceQueries.h"
 #include "world/queries/TerrainQueries.h"
 
 #include <cmath>
@@ -51,6 +52,13 @@ namespace olam
             const AgricultureSuitability farming = agricultureAt(world, coord);
             lines.push_back(std::format("Farming: grain {:.0f}  livestock {:.0f}  orchard {:.0f} %", farming.grain * 100.0f,
                                         farming.livestock * 100.0f, farming.orchard * 100.0f));
+        }
+
+        if (!world.geography().vegetation.empty() && world.hydrology().surfaceWater[tile.index()] == SurfaceWater::Land)
+        {
+            const BiologicalYields yields = biologicalYieldsAt(world, coord);
+            lines.push_back(std::format("Yields: wood {:.0f}  game {:.0f}  fish {:.0f} %", yields.wood * 100.0f,
+                                        yields.game * 100.0f, yields.fish * 100.0f));
         }
 
         if (options.showDebugHash)

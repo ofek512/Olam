@@ -69,6 +69,25 @@ namespace olam
             writer.write(entityHash);
         }
 
+        const ResourceData &resources = world.resources();
+        if (!resources.depositId.empty())
+        {
+            ByteWriter entities;
+            entities.write(static_cast<std::uint32_t>(resources.deposits.size()));
+            for (const Deposit &deposit : resources.deposits)
+            {
+                entities.write(deposit.id);
+                entities.write(deposit.mineral);
+                entities.write(deposit.center.x);
+                entities.write(deposit.center.y);
+                entities.write(deposit.tileCount);
+                entities.write(deposit.richness);
+            }
+            const std::uint64_t entityHash = entities.hash();
+            result.layers.push_back({"Deposits", entityHash});
+            writer.write(entityHash);
+        }
+
         result.combined = writer.hash();
         return result;
     }

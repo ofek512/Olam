@@ -93,4 +93,22 @@ namespace olam
         Layer<std::uint8_t> treeCover;
     };
 
+    // A cluster of tiles holding one mineral.
+    struct Deposit
+    {
+        DepositId id;
+        MineralType mineral = MineralType::Iron;
+        WorldCoord center;
+        std::uint32_t tileCount = 0;
+        // 1..100 %.
+        std::uint8_t richness = 0;
+    };
+
+    struct ResourceData
+    {
+        Layer<DepositId> depositId;
+        // Indexed by id.index().
+        std::vector<Deposit> deposits;
+    };
+
 } // namespace olam
