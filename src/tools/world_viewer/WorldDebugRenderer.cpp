@@ -4,9 +4,11 @@
 #include "render/camera/Camera2D.h"
 #include "render/renderer/Renderer.h"
 #include "world/World.h"
+#include "world/queries/HydrologyQueries.h"
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -50,6 +52,43 @@ namespace olam
 
         const Vec2 origin = camera.worldToScreen({0.0f, 0.0f});
         renderer.drawRect({origin.x, origin.y, width * camera.zoom(), height * camera.zoom()}, Color{230, 200, 80});
+
+        drawRivers(renderer, camera, world);
+    }
+
+    void WorldDebugRenderer::drawRivers(Renderer &renderer, const Camera2D &camera, const World &world) const
+    {
+        constexpr float kMinZoom = 4.0f;
+        const HydrologyData &hydrology = world.hydrology();
+        if (camera.zoom() < kMinZoom || hydrology.riverId.empty())
+            return;
+
+        const Rect view = camera.visibleWorldRect();
+        const int x0 = std::max(0, static_cast<int>(std::floor(view.x)) - 1);
+        const int y0 = std::max(0, static_cast<int>(std::floor(view.y)) - 1);
+        const int x1 = std::min(world.width(), static_cast<int>(std::ceil(view.x + view.w)) + 1);
+        const int y1 = std::min(world.height(), static_cast<int>(std::ceil(view.y + view.h)) + 1);
+        const Color color{40, 90, 210};
+        for (int y = y0; y < y1; ++y)
+        {
+            for (int x = x0; x < x1; ++x)
+            {
+                const std::size_t i = world.index({x, y});
+                const RiverClass riverClass = riverClassAt(world, i);
+                if (riverClass == RiverClass::None)
+                    continue;
+                const WorldCoord next = neighbor({x, y}, hydrology.flowDirection[i]);
+                const Vec2 from = camera.worldToScreen({static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f});
+                const Vec2 to = camera.worldToScreen({static_cast<float>(next.x) + 0.5f, static_cast<float>(next.y) + 0.5f});
+                // Width by class: 1, 2 or 3 parallel pixel lines.
+                const int lines = static_cast<int>(riverClass);
+                for (int line = 0; line < lines; ++line)
+                {
+                    const float offset = static_cast<float>(line) - static_cast<float>(lines - 1) * 0.5f;
+                    renderer.drawLine({from.x + offset, from.y + offset}, {to.x + offset, to.y + offset}, color);
+                }
+            }
+        }
     }
 
     void WorldDebugRenderer::rebuild(Renderer &renderer, const World &world)

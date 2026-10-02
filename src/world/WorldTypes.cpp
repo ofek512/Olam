@@ -35,4 +35,40 @@ namespace olam
         return "?";
     }
 
+    std::string_view toString(RiverEnd end)
+    {
+        switch (end)
+        {
+        case RiverEnd::Ocean:
+            return "ocean";
+        case RiverEnd::Lake:
+            return "lake";
+        case RiverEnd::River:
+            return "river";
+        case RiverEnd::MapEdge:
+            return "map edge";
+        case RiverEnd::Count:
+            break;
+        }
+        return "?";
+    }
+
+    std::string_view toString(RiverClass riverClass)
+    {
+        switch (riverClass)
+        {
+        case RiverClass::None:
+            return "none";
+        case RiverClass::Stream:
+            return "stream";
+        case RiverClass::River:
+            return "river";
+        case RiverClass::Major:
+            return "major river";
+        case RiverClass::Count:
+            break;
+        }
+        return "?";
+    }
+
 } // namespace olam

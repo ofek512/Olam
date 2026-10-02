@@ -75,6 +75,25 @@ namespace olam
         float blurKm = 40.0f;
     };
 
+    struct HydrologySettings
+    {
+        // A filled depression becomes a lake when it is this large or this deep.
+        std::int32_t minLakeTiles = 25;
+        std::int32_t minLakeDepthM = 15;
+        // Noise added to the flow-routing surface only (not to elevation) so channels meander on smooth slopes.
+        float routingNoiseM = 12.0f;
+        float routingNoiseWavelengthKm = 50.0f;
+        // Discharge (m^3/s) for a tile to carry a stream / river / major river. Catchments on a 2048 km map are
+        // regional, so the classes are scaled down from Earth's continental rivers.
+        float streamDischarge = 10.0f;
+        float riverDischarge = 50.0f;
+        float majorRiverDischarge = 300.0f;
+        // Floodplain half-width = base + perSqrtDischarge * sqrt(discharge); fades out over maxRiseM above the river.
+        float floodplainBaseKm = 2.0f;
+        float floodplainKmPerSqrtDischarge = 0.3f;
+        float floodplainMaxRiseM = 30.0f;
+    };
+
     // Tuning values for every generation pass. Part of WorldConfig, so they are validated, hashed and saved.
     // Each pass adds its own group when it is implemented.
     struct WorldGenSettings
@@ -84,6 +103,7 @@ namespace olam
         OceanSettings ocean;
         TemperatureSettings temperature;
         RainfallSettings rainfall;
+        HydrologySettings hydrology;
     };
 
     // Calls visit(field) for every setting in a fixed order (hashing, saving, loading).
@@ -131,6 +151,18 @@ namespace olam
         visit(rain.noiseAmplitude);
         visit(rain.noiseWavelengthKm);
         visit(rain.blurKm);
+
+        auto &hydro = settings.hydrology;
+        visit(hydro.minLakeTiles);
+        visit(hydro.minLakeDepthM);
+        visit(hydro.routingNoiseM);
+        visit(hydro.routingNoiseWavelengthKm);
+        visit(hydro.streamDischarge);
+        visit(hydro.riverDischarge);
+        visit(hydro.majorRiverDischarge);
+        visit(hydro.floodplainBaseKm);
+        visit(hydro.floodplainKmPerSqrtDischarge);
+        visit(hydro.floodplainMaxRiseM);
     }
 
     std::optional<std::string> validateGenerationSettings(const WorldGenSettings &settings);

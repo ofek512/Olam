@@ -152,12 +152,18 @@ other intermediate layers.
 
 ### Hydrology
 
-- Priority-flood (ties broken by tile index) from outlets (ocean-adjacent and map-edge tiles) gives every land
-  tile a D8 flow direction toward its outlet; the map edge drains like the sea.
+- Priority-flood (ties broken by insertion order) from outlets (ocean-adjacent and map-edge tiles) over the true
+  elevation finds depressions; the map edge drains like the sea.
 - Filled depressions become lakes when large or deep enough; every lake spills over its lowest rim.
-- Discharge = runoff (rainfall minus a share of potential evaporation) accumulated downstream.
-- Tiles with discharge above a threshold carry a river; classes stream / river / major river are derived.
-  One `River` per main stem: at a confluence the smaller river ends as a tributary. No valley carving in V0.1.
+- Flow directions come from a second priority-flood over the filled surface plus low-amplitude noise (routing
+  only, elevation is unchanged), so channels meander on smooth slopes instead of following grid lines.
+- Discharge = runoff accumulated downstream. Runoff = rainfall − actual evapotranspiration (Turc-Pike:
+  `AET = P / sqrt(1 + (P/PET)²)`).
+- Tiles with discharge above a threshold carry a river; classes stream / river / major river (defaults 10 / 50 /
+  300 m³/s, scaled to regional catchments). One `River` per main stem: at a confluence the smaller river ends as
+  a tributary; ids are ordered by mouth discharge. No valley carving in V0.1.
+- A floodplain working layer (strength by distance to the river, width growing with √discharge, fading with
+  height above the river) is left for soil and fertility.
 
 ### Soil, biome, fertility, vegetation
 

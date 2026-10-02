@@ -84,6 +84,7 @@ add_library(olam_world STATIC
     src/world/WorldStats.cpp
     src/world/WorldTypes.cpp
     src/world/queries/TerrainQueries.cpp
+    src/world/queries/HydrologyQueries.cpp
 )
 target_link_libraries(olam_world
     PUBLIC olam_core
@@ -104,6 +105,7 @@ add_library(olam_worldgen STATIC
     src/worldgen/passes/OceanPass.cpp
     src/worldgen/passes/TemperaturePass.cpp
     src/worldgen/passes/RainfallPass.cpp
+    src/worldgen/passes/HydrologyPass.cpp
 )
 target_link_libraries(olam_worldgen
     PUBLIC olam_world

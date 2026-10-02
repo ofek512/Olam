@@ -4,6 +4,7 @@
 #include "tools/world_viewer/ColorRamp.h"
 #include "tools/world_viewer/DebugHashView.h"
 #include "world/World.h"
+#include "world/queries/HydrologyQueries.h"
 
 #include <algorithm>
 #include <array>
@@ -81,6 +82,18 @@ namespace olam
             return world.terrain().elevation[index] < 0;
         }
 
+        constexpr Rgb kLakeColor{60, 120, 190};
+        constexpr std::array<Rgb, 4> kRiverColors = {{{0, 0, 0}, {90, 150, 215}, {50, 110, 205}, {25, 70, 180}}};
+
+        bool riverColor(const World &world, std::size_t index, Rgb &color)
+        {
+            const RiverClass riverClass = riverClassAt(world, index);
+            if (riverClass == RiverClass::None)
+                return false;
+            color = kRiverColors[static_cast<std::size_t>(riverClass)];
+            return true;
+        }
+
         // Lambert shading with light from the north-west; ~1 on flat ground.
         float hillshade(const World &world, int x, int y)
         {
@@ -112,12 +125,14 @@ namespace olam
                     const auto meters = static_cast<float>(elevation[i]);
                     if (isWater(world, i))
                     {
-                        writePixel(rgba, i, sampleRamp(kSeaTints, meters));
+                        const bool lake = world.hydrology().surfaceWater[i] == SurfaceWater::Lake;
+                        writePixel(rgba, i, lake ? kLakeColor : sampleRamp(kSeaTints, meters));
                         continue;
                     }
                     Rgb color = sampleRamp(kLandTints, meters);
                     if (options.hillshade)
                         color = scale(color, hillshade(world, x, y));
+                    riverColor(world, i, color);
                     writePixel(rgba, i, color);
                 }
             }
@@ -215,6 +230,44 @@ namespace olam
             {255.0f, {30, 90, 150}},
         }};
 
+        // Muted land with the whole drainage network: faint below the stream threshold, then by river class.
+        void colorizeHydrology(const World &world, const ViewOptions &options, std::span<std::uint8_t> rgba)
+        {
+            const auto &hydrology = world.hydrology();
+            const auto &elevation = world.terrain().elevation;
+            const float stream = world.config().generation.hydrology.streamDischarge;
+            for (int y = 0; y < world.height(); ++y)
+            {
+                for (int x = 0; x < world.width(); ++x)
+                {
+                    const std::size_t i = elevation.index(x, y);
+                    if (hydrology.surfaceWater[i] == SurfaceWater::Ocean)
+                    {
+                        writePixel(rgba, i, {25, 35, 60});
+                        continue;
+                    }
+                    if (hydrology.surfaceWater[i] == SurfaceWater::Lake)
+                    {
+                        writePixel(rgba, i, kLakeColor);
+                        continue;
+                    }
+                    const float shade = 205.0f - 60.0f * std::min(1.0f, static_cast<float>(elevation[i]) / 3000.0f);
+                    Rgb color{static_cast<std::uint8_t>(shade), static_cast<std::uint8_t>(shade),
+                              static_cast<std::uint8_t>(shade)};
+                    if (options.hillshade)
+                        color = scale(color, hillshade(world, x, y));
+                    if (!riverColor(world, i, color))
+                    {
+                        // Drainage below the stream threshold, on a log scale from 1 % to 100 % of it.
+                        const float discharge = static_cast<float>(hydrology.discharge[i]) / 100.0f;
+                        const float t = std::clamp(std::log10(std::max(discharge / stream, 1e-6f)) * 0.5f + 1.0f, 0.0f, 1.0f);
+                        color = mix(color, kRiverColors[1], 0.6f * t);
+                    }
+                    writePixel(rgba, i, color);
+                }
+            }
+        }
+
     } // namespace
 
     const WorldViewInfo &viewInfo(WorldView view)
@@ -241,6 +294,8 @@ namespace olam
             return !world.climate().annualRainfall.empty();
         case WorldView::Moisture:
             return !world.climate().moisture.empty();
+        case WorldView::Hydrology:
+            return !world.hydrology().discharge.empty();
         case WorldView::HashDebug:
             return true;
         default:
@@ -310,6 +365,9 @@ namespace olam
                          { return static_cast<float>(moisture[i]); }, rgba);
             break;
         }
+        case WorldView::Hydrology:
+            colorizeHydrology(world, options, rgba);
+            break;
         case WorldView::HashDebug:
         default:
             colorizeHashDebug(world, rgba);

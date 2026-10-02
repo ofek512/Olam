@@ -24,6 +24,8 @@ namespace olam
 
     private:
         void rebuild(Renderer &renderer, const World &world);
+        // River lines on top of the texture when zoomed in far enough to see individual tiles.
+        void drawRivers(Renderer &renderer, const Camera2D &camera, const World &world) const;
 
         Texture m_texture;
         WorldView m_view = WorldView::HashDebug;

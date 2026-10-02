@@ -1,5 +1,7 @@
 #include "world/WorldLayers.h"
 
+#include "world/queries/HydrologyQueries.h"
+
 #include <array>
 #include <format>
 
@@ -18,7 +20,13 @@ namespace olam
             {LayerId::Temperature, "Temperature", "C"},
             {LayerId::Rainfall, "Rainfall", "mm/yr"},
             {LayerId::Moisture, "Moisture", ""},
+            {LayerId::FlowDirection, "Flow", ""},
+            {LayerId::Discharge, "Discharge", "m3/s"},
+            {LayerId::RiverId, "River", ""},
+            {LayerId::LakeId, "Lake", ""},
         };
+
+        constexpr std::string_view kDirectionNames[] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
 
     } // namespace
 
@@ -62,6 +70,31 @@ namespace olam
                                 : aridity < 0.65 ? "dry sub-humid"
                                                  : "humid";
             return std::format("AI {:.2f} ({})", aridity, label);
+        }
+        case LayerId::FlowDirection:
+        {
+            const auto direction = static_cast<std::size_t>(world.hydrology().flowDirection[index]);
+            return direction < kDirection8Count ? std::string(kDirectionNames[direction]) : std::string("-");
+        }
+        case LayerId::Discharge:
+            return std::format("{:.2f} m3/s", world.hydrology().discharge[index] / 100.0);
+        case LayerId::RiverId:
+        {
+            const RiverId riverId = world.hydrology().riverId[index];
+            if (!riverId.isValid())
+                return "-";
+            const River &river = world.hydrology().rivers[riverId.index()];
+            return std::format("#{} {}, {} tiles -> {}", riverId.value,
+                               toString(riverClassForDischarge(world.config().generation.hydrology, river.mouthDischarge)),
+                               river.path.size(), toString(river.endsIn));
+        }
+        case LayerId::LakeId:
+        {
+            const LakeId lakeId = world.hydrology().lakeId[index];
+            if (!lakeId.isValid())
+                return "-";
+            const Lake &lake = world.hydrology().lakes[lakeId.index()];
+            return std::format("#{} surface {} m, {} tiles", lakeId.value, lake.surfaceElevation, lake.tileCount);
         }
         case LayerId::Count:
             break;

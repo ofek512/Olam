@@ -73,6 +73,13 @@ namespace olam
               rain.mmScale > 0.0f && rain.noiseAmplitude >= 0.0f && rain.noiseAmplitude < 1.0f &&
               rain.noiseWavelengthKm > 0.0f && rain.blurKm >= 0.0f))
             return "rainfall settings out of range";
+        const auto &hydro = settings.hydrology;
+        if (!(hydro.minLakeTiles >= 1 && hydro.minLakeDepthM >= 1 && hydro.routingNoiseM >= 0.0f &&
+              hydro.routingNoiseWavelengthKm > 0.0f && hydro.streamDischarge > 0.0f &&
+              hydro.riverDischarge >= hydro.streamDischarge && hydro.majorRiverDischarge >= hydro.riverDischarge &&
+              hydro.majorRiverDischarge < 1.0e7f && hydro.floodplainBaseKm >= 0.0f &&
+              hydro.floodplainKmPerSqrtDischarge >= 0.0f && hydro.floodplainMaxRiseM > 0.0f))
+            return "hydrology settings out of range";
         return std::nullopt;
     }
 

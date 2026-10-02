@@ -22,6 +22,10 @@ namespace olam
         Temperature,
         Rainfall,
         Moisture,
+        FlowDirection,
+        Discharge,
+        RiverId,
+        LakeId,
         Count,
     };
 
@@ -64,6 +68,18 @@ namespace olam
             break;
         case LayerId::Moisture:
             f(world.climate().moisture);
+            break;
+        case LayerId::FlowDirection:
+            f(world.hydrology().flowDirection);
+            break;
+        case LayerId::Discharge:
+            f(world.hydrology().discharge);
+            break;
+        case LayerId::RiverId:
+            f(world.hydrology().riverId);
+            break;
+        case LayerId::LakeId:
+            f(world.hydrology().lakeId);
             break;
         case LayerId::Count:
             break;

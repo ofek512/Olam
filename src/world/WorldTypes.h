@@ -29,4 +29,28 @@ namespace olam
 
     std::string_view toString(SurfaceWater water);
 
+    // Where a river's main stem ends.
+    enum class RiverEnd : std::uint8_t
+    {
+        Ocean,
+        Lake,
+        River,
+        MapEdge,
+        Count,
+    };
+
+    std::string_view toString(RiverEnd end);
+
+    // Size class derived from discharge (see HydrologySettings).
+    enum class RiverClass : std::uint8_t
+    {
+        None,
+        Stream,
+        River,
+        Major,
+        Count,
+    };
+
+    std::string_view toString(RiverClass riverClass);
+
 } // namespace olam

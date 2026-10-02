@@ -1,6 +1,7 @@
 #include "world/WorldStats.h"
 
 #include "world/World.h"
+#include "world/queries/HydrologyQueries.h"
 
 #include <algorithm>
 #include <format>
@@ -72,6 +73,29 @@ namespace olam
             lines.push_back(std::format("Land rain mean {:.0f} mm   arid land {:.1f} %   wettest {} mm",
                                         static_cast<double>(landRain) / landCount,
                                         100.0 * static_cast<double>(aridTiles) / landCount, wettest));
+        }
+
+        const HydrologyData &hydrology = world.hydrology();
+        if (!hydrology.discharge.empty())
+        {
+            const HydrologySettings &settings = config.generation.hydrology;
+            std::size_t counts[static_cast<std::size_t>(RiverClass::Count)] = {};
+            std::size_t longest = 0;
+            for (const River &river : hydrology.rivers)
+            {
+                ++counts[static_cast<std::size_t>(riverClassForDischarge(settings, river.mouthDischarge))];
+                longest = std::max(longest, river.path.size());
+            }
+            const double largest = hydrology.rivers.empty() ? 0.0 : hydrology.rivers.front().mouthDischarge / 100.0;
+            lines.push_back(std::format("Rivers {} (major {}, river {})   longest {:.0f} km   largest {:.0f} m3/s",
+                                        hydrology.rivers.size(), counts[static_cast<std::size_t>(RiverClass::Major)],
+                                        counts[static_cast<std::size_t>(RiverClass::River)],
+                                        static_cast<double>(longest) * config.tileSizeMeters / 1000.0, largest));
+            std::uint32_t largestLake = 0;
+            for (const Lake &lake : hydrology.lakes)
+                largestLake = std::max(largestLake, lake.tileCount);
+            const double tileKm2 = config.tileSizeMeters * config.tileSizeMeters / 1.0e6;
+            lines.push_back(std::format("Lakes {}   largest {:.0f} km2", hydrology.lakes.size(), largestLake * tileKm2));
         }
         return lines;
     }
