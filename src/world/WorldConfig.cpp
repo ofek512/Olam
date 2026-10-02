@@ -50,6 +50,10 @@ namespace olam
         if (!(t.boundaryWarpKm >= 0.0f && t.boundaryWarpWavelengthKm > 0.0f && t.boundaryBlendKm > 0.0f &&
               t.beltWidthKm > 0.0f && t.mountainWidthKm > 0.0f && t.riftWidthKm > 0.0f))
             return "tectonic distances must be positive";
+        if (t.paleoPlateCount < 2 || t.paleoPlateCount > 255 || !(t.ancientBeltWidthKm > 0.0f) ||
+            !(t.ancientMassifWavelengthKm > 0.0f) || !(t.graniteWavelengthKm > 0.0f) ||
+            !(t.graniteThreshold > -1.0f && t.graniteThreshold < 1.0f))
+            return "ancient orogen / granite settings out of range";
 
         const auto &e = settings.elevation;
         if (!(e.landFraction > 0.0f && e.landFraction < 1.0f))
@@ -58,6 +62,8 @@ namespace olam
             return "land fraction variation must be within [0, 0.5)";
         if (!(e.noiseWavelengthKm > 0.0f))
             return "elevation noise wavelength must be positive";
+        if (!(e.ancientUpliftStrength >= 0.0f && e.ancientUpliftStrength <= 1.0f))
+            return "ancient uplift strength must be within [0, 1]";
         if (e.noiseOctaves < 1 || e.noiseOctaves > 12)
             return "elevation noise octaves must be within [1, 12]";
         if (e.smoothingIterations < 0 || e.smoothingIterations > 100 || e.minIslandTiles < 0)

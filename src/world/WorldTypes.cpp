@@ -19,6 +19,28 @@ namespace olam
         return "?";
     }
 
+    std::string_view toString(GeologicalProvince province)
+    {
+        switch (province)
+        {
+        case GeologicalProvince::Oceanic:
+            return "Oceanic crust";
+        case GeologicalProvince::Basin:
+            return "Sedimentary basin";
+        case GeologicalProvince::Shield:
+            return "Shield";
+        case GeologicalProvince::AncientOrogen:
+            return "Ancient orogen";
+        case GeologicalProvince::ActiveOrogen:
+            return "Active orogen";
+        case GeologicalProvince::Rift:
+            return "Rift";
+        case GeologicalProvince::Count:
+            break;
+        }
+        return "?";
+    }
+
     std::string_view toString(SurfaceWater water)
     {
         switch (water)

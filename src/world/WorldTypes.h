@@ -18,6 +18,26 @@ namespace olam
 
     std::string_view toString(RockType rock);
 
+    // Large-scale geological setting; drives rock type and where ores form.
+    enum class GeologicalProvince : std::uint8_t
+    {
+        // Thin oceanic crust (sea floor, volcanic islands).
+        Oceanic,
+        // Sedimentary cover on continental crust (lowland platforms).
+        Basin,
+        // Old exposed crystalline basement (cratons).
+        Shield,
+        // Eroded mountain belt of an older tectonic cycle, now uplands and hills.
+        AncientOrogen,
+        // Mountain belt or volcanic arc along a converging plate boundary.
+        ActiveOrogen,
+        // Diverging boundary: rift valley, volcanic.
+        Rift,
+        Count,
+    };
+
+    std::string_view toString(GeologicalProvince province);
+
     // Standing water only; rivers flow through Land tiles.
     enum class SurfaceWater : std::uint8_t
     {

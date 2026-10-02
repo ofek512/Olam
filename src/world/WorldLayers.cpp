@@ -30,6 +30,7 @@ namespace olam
             {LayerId::Vegetation, "Vegetation", ""},
             {LayerId::TreeCover, "Tree cover", "%"},
             {LayerId::DepositId, "Deposit", ""},
+            {LayerId::Province, "Province", ""},
         };
 
         constexpr std::string_view kDirectionNames[] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
@@ -121,6 +122,8 @@ namespace olam
             return std::format("#{} {} (richness {} %, {} tiles)", depositId.value, toString(deposit.mineral),
                                deposit.richness, deposit.tileCount);
         }
+        case LayerId::Province:
+            return std::string(toString(world.terrain().province[index]));
         case LayerId::Count:
             break;
         }

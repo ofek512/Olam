@@ -158,7 +158,8 @@ namespace olam
 
     std::optional<std::string> ElevationPass::validatePreconditions(const WorldGenContext &context) const
     {
-        if (context.world().terrain().plateId.empty() || !context.findWorkingLayer(worldgen::kPlateBase))
+        if (context.world().terrain().plateId.empty() || !context.findWorkingLayer(worldgen::kPlateBase) ||
+            !context.findWorkingLayer(worldgen::kAncientBelt))
             return std::string("requires TectonicsPass");
         return std::nullopt;
     }
@@ -175,6 +176,7 @@ namespace olam
         const Layer<float> &base = *context.findWorkingLayer(worldgen::kPlateBase);
         const Layer<float> &uplift = *context.findWorkingLayer(worldgen::kUplift);
         const Layer<float> &rift = *context.findWorkingLayer(worldgen::kRift);
+        const Layer<float> &ancient = *context.findWorkingLayer(worldgen::kAncientBelt);
 
         const std::uint64_t detailSeed = deriveSeed(seed, olam::seedId("DETAIL"));
         const std::uint64_t ridgeSeed = deriveSeed(seed, olam::seedId("RIDGES"));
@@ -182,6 +184,7 @@ namespace olam
         const noise::FractalParams ridgeParams{4, 1.0f / 300.0f, 2.0f, 0.5f};
         noise::FractalSampler detailNoise(detailSeed, detailParams);
         noise::FractalSampler ridgeNoise(ridgeSeed, ridgeParams);
+        noise::FractalSampler uplandNoise(deriveSeed(seed, olam::seedId("UPLANDS")), {3, 1.0f / 200.0f, 2.0f, 0.5f});
 
         Layer<float> raw(width, height);
         for (int y = 0; y < height; ++y)
@@ -198,6 +201,8 @@ namespace olam
                     h += settings.mountainStrength * uplift[i] * ridges;
                 }
                 h -= settings.riftStrength * rift[i];
+                if (ancient[i] > 0.0f)
+                    h += settings.ancientUpliftStrength * ancient[i] * (0.6f + 0.4f * uplandNoise.fbm(kmX, kmY));
                 raw[i] = h;
             }
         }

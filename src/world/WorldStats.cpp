@@ -35,6 +35,31 @@ namespace olam
                                         highest, deepest));
         }
 
+        const auto &province = world.terrain().province;
+        if (!province.empty() && !elevation.empty())
+        {
+            std::size_t counts[static_cast<std::size_t>(GeologicalProvince::Count)] = {};
+            std::int64_t heights[static_cast<std::size_t>(GeologicalProvince::Count)] = {};
+            std::size_t land = 0;
+            for (std::size_t i = 0; i < province.size(); ++i)
+            {
+                if (elevation[i] < 0)
+                    continue;
+                ++land;
+                ++counts[static_cast<std::size_t>(province[i])];
+                heights[static_cast<std::size_t>(province[i])] += elevation[i];
+            }
+            std::string line = "Land provinces";
+            for (std::size_t p = 1; p < static_cast<std::size_t>(GeologicalProvince::Count); ++p)
+            {
+                const double share = 100.0 * static_cast<double>(counts[p]) / static_cast<double>(std::max<std::size_t>(land, 1));
+                const double meanHeight =
+                    static_cast<double>(heights[p]) / static_cast<double>(std::max<std::size_t>(counts[p], 1));
+                line += std::format("   {} {:.0f} % ({:.0f} m)", toString(static_cast<GeologicalProvince>(p)), share, meanHeight);
+            }
+            lines.push_back(line);
+        }
+
         const auto &water = world.hydrology().surfaceWater;
         if (!water.empty())
         {

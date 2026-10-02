@@ -29,14 +29,14 @@ namespace olam
             bool continental;
         };
 
-        std::vector<Plate> createPlates(const World &world, std::uint64_t seed)
+        std::vector<Plate> createPlates(const World &world, int count, std::uint64_t seed)
         {
             const TectonicsSettings &settings = world.config().generation.tectonics;
             Pcg32 rng(seed);
             std::vector<Plate> plates;
-            plates.reserve(static_cast<std::size_t>(settings.plateCount));
+            plates.reserve(static_cast<std::size_t>(count));
 
-            for (int i = 0; i < settings.plateCount; ++i)
+            for (int i = 0; i < count; ++i)
             {
                 Plate plate{};
                 plate.x = rng.nextFloat01() * static_cast<float>(world.width());
@@ -80,6 +80,56 @@ namespace olam
             return plates;
         }
 
+        // The two plates nearest to a point and how that point relates to the boundary between them.
+        struct BoundaryContact
+        {
+            std::size_t own = 0;
+            std::size_t other = 0;
+            float distanceKm = 0.0f;
+            // Relative drift towards each other (> 0 converging, < 0 diverging).
+            float converging = 0.0f;
+        };
+
+        BoundaryContact nearestBoundary(const std::vector<Plate> &plates, float px, float py, float tileKm)
+        {
+            std::size_t nearest = 0;
+            std::size_t second = 1;
+            float nearestSq = 3.4e38f;
+            float secondSq = 3.4e38f;
+            for (std::size_t p = 0; p < plates.size(); ++p)
+            {
+                const float dx = px - plates[p].x;
+                const float dy = py - plates[p].y;
+                const float distSq = dx * dx + dy * dy;
+                if (distSq < nearestSq)
+                {
+                    second = nearest;
+                    secondSq = nearestSq;
+                    nearest = p;
+                    nearestSq = distSq;
+                }
+                else if (distSq < secondSq)
+                {
+                    second = p;
+                    secondSq = distSq;
+                }
+            }
+
+            const Plate &own = plates[nearest];
+            const Plate &other = plates[second];
+            const float nx = other.x - own.x;
+            const float ny = other.y - own.y;
+            const float separation = std::sqrt(nx * nx + ny * ny);
+            BoundaryContact contact;
+            contact.own = nearest;
+            contact.other = second;
+            // Distance from the point to the perpendicular bisector between both plate centres.
+            contact.distanceKm = (separation > 0.0f ? (secondSq - nearestSq) / (2.0f * separation) : 0.0f) * tileKm;
+            contact.converging =
+                separation > 0.0f ? ((own.driftX - other.driftX) * nx + (own.driftY - other.driftY) * ny) / separation : 0.0f;
+            return contact;
+        }
+
     } // namespace
 
     void TectonicsPass::run(WorldGenContext &context)
@@ -91,7 +141,9 @@ namespace olam
         const int height = world.height();
         const auto tileKm = static_cast<float>(world.config().tileSizeMeters / 1000.0);
 
-        const std::vector<Plate> plates = createPlates(world, seed);
+        const std::vector<Plate> plates = createPlates(world, settings.plateCount, seed);
+        const std::vector<Plate> paleoPlates =
+            createPlates(world, settings.paleoPlateCount, deriveSeed(seed, olam::seedId("PALEO")));
         const std::uint64_t warpSeedX = deriveSeed(seed, olam::seedId("WARPX"));
         const std::uint64_t warpSeedY = deriveSeed(seed, olam::seedId("WARPY"));
         const std::uint64_t rockSeed = deriveSeed(seed, olam::seedId("ROCK"));
@@ -105,9 +157,11 @@ namespace olam
         auto &terrain = world.terrain();
         terrain.plateId.resize(width, height, 0);
         terrain.rockType.resize(width, height, RockType::Sedimentary);
+        terrain.province.resize(width, height, GeologicalProvince::Count);
         Layer<float> &base = context.createWorkingLayer(worldgen::kPlateBase);
         Layer<float> &uplift = context.createWorkingLayer(worldgen::kUplift);
         Layer<float> &rift = context.createWorkingLayer(worldgen::kRift);
+        Layer<float> &ancient = context.createWorkingLayer(worldgen::kAncientBelt);
 
         for (int y = 0; y < height; ++y)
         {
@@ -119,40 +173,11 @@ namespace olam
                 const float px = static_cast<float>(x) + 0.5f + warpTiles * warpX.fbm(kmX, kmY);
                 const float py = static_cast<float>(y) + 0.5f + warpTiles * warpY.fbm(kmX, kmY);
 
-                std::size_t nearest = 0;
-                std::size_t second = 1;
-                float nearestSq = 3.4e38f;
-                float secondSq = 3.4e38f;
-                for (std::size_t p = 0; p < plates.size(); ++p)
-                {
-                    const float dx = px - plates[p].x;
-                    const float dy = py - plates[p].y;
-                    const float distSq = dx * dx + dy * dy;
-                    if (distSq < nearestSq)
-                    {
-                        second = nearest;
-                        secondSq = nearestSq;
-                        nearest = p;
-                        nearestSq = distSq;
-                    }
-                    else if (distSq < secondSq)
-                    {
-                        second = p;
-                        secondSq = distSq;
-                    }
-                }
-
-                const Plate &own = plates[nearest];
-                const Plate &other = plates[second];
-                const float nx = other.x - own.x;
-                const float ny = other.y - own.y;
-                const float separation = std::sqrt(nx * nx + ny * ny);
-                // Distance from the point to the perpendicular bisector between both plate centres.
-                const float distanceTiles = separation > 0.0f ? (secondSq - nearestSq) / (2.0f * separation) : 0.0f;
-                const float distance = distanceTiles * tileKm;
-                const float converging = separation > 0.0f
-                                             ? ((own.driftX - other.driftX) * nx + (own.driftY - other.driftY) * ny) / separation
-                                             : 0.0f;
+                const BoundaryContact contact = nearestBoundary(plates, px, py, tileKm);
+                const Plate &own = plates[contact.own];
+                const Plate &other = plates[contact.other];
+                const float distance = contact.distanceKm;
+                const float converging = contact.converging;
                 const int contacts = (own.continental ? 1 : 0) + (other.continental ? 1 : 0);
 
                 base[i] = own.baseHeight;
@@ -166,15 +191,27 @@ namespace olam
                 {
                     rift[i] = -converging * (1.0f - smoothstep(0.0f, settings.riftWidthKm, distance));
                 }
-                terrain.plateId[i] = static_cast<std::uint8_t>(nearest);
+                terrain.plateId[i] = static_cast<std::uint8_t>(contact.own);
+
+                // Collision zones of the older cycle; restricted to continental crust once it is smoothed.
+                const BoundaryContact paleo = nearestBoundary(paleoPlates, px, py, tileKm);
+                if (paleo.converging > 0.0f)
+                    ancient[i] = std::min(1.0f, 2.0f * paleo.converging) *
+                                 (1.0f - smoothstep(0.0f, settings.ancientBeltWidthKm, paleo.distanceKm));
 
                 // Active belts first; plate interiors are decided after the crust field is smoothed.
                 RockType rock = RockType::Count;
                 const bool inBelt = distance < settings.beltWidthKm;
                 if (inBelt && converging > 0.2f)
+                {
                     rock = contacts == 2 ? RockType::Metamorphic : RockType::Igneous;
+                    terrain.province[i] = GeologicalProvince::ActiveOrogen;
+                }
                 else if (inBelt && converging < -0.2f)
+                {
                     rock = RockType::Igneous;
+                    terrain.province[i] = GeologicalProvince::Rift;
+                }
                 terrain.rockType[i] = rock;
             }
         }
@@ -185,25 +222,63 @@ namespace olam
         boxBlur(base, tilesFor(settings.boundaryBlendKm), 3);
         boxBlur(uplift, tilesFor(settings.mountainWidthKm * 0.25f), 2);
         boxBlur(rift, tilesFor(settings.riftWidthKm * 0.25f), 2);
+        boxBlur(ancient, tilesFor(settings.ancientBeltWidthKm * 0.25f), 2);
 
-        // Thick (continental) crust: sedimentary basins and metamorphic shields; thin oceanic crust: igneous.
+        // Thick (continental) crust: basins, shields and ancient orogens; thin oceanic crust: igneous.
         constexpr float kContinentalCrust = 0.42f;
+        constexpr float kAncientOrogen = 0.3f;
+        noise::FractalSampler massifNoise(deriveSeed(seed, olam::seedId("MASSIF")),
+                                          {3, 1.0f / settings.ancientMassifWavelengthKm, 2.0f, 0.5f});
+        noise::FractalSampler graniteNoise(deriveSeed(seed, olam::seedId("GRANITE")),
+                                           {3, 1.0f / settings.graniteWavelengthKm, 2.0f, 0.5f});
         for (int y = 0; y < height; ++y)
         {
             for (int x = 0; x < width; ++x)
             {
                 const std::size_t i = base.index(x, y);
-                if (terrain.rockType[i] != RockType::Count)
-                    continue;
-                if (base[i] < kContinentalCrust)
-                {
-                    terrain.rockType[i] = RockType::Igneous;
-                    continue;
-                }
                 const float kmX = (static_cast<float>(x) + 0.5f) * tileKm;
                 const float kmY = (static_cast<float>(y) + 0.5f) * tileKm;
-                terrain.rockType[i] =
-                    rockNoise.fbm(kmX, kmY) > 0.2f ? RockType::Metamorphic : RockType::Sedimentary;
+
+                // Old belts survive as separate massifs (Bohemian Massif, Harz, Cornwall) rather than a continuous line.
+                if (ancient[i] > 0.0f)
+                    ancient[i] *= smoothstep(0.38f, 0.46f, base[i]) * smoothstep(-0.35f, 0.15f, massifNoise.fbm(kmX, kmY));
+
+                GeologicalProvince province = terrain.province[i];
+                if (province == GeologicalProvince::Count)
+                {
+                    if (base[i] < kContinentalCrust)
+                        province = GeologicalProvince::Oceanic;
+                    else if (ancient[i] >= kAncientOrogen)
+                        province = GeologicalProvince::AncientOrogen;
+                    else if (rockNoise.fbm(kmX, kmY) > 0.2f)
+                        province = GeologicalProvince::Shield;
+                    else
+                        province = GeologicalProvince::Basin;
+                    terrain.province[i] = province;
+                }
+
+                // Granite intrusions only matter in crystalline provinces.
+                const auto granite = [&]
+                { return graniteNoise.fbm(kmX, kmY) > settings.graniteThreshold; };
+                switch (province)
+                {
+                case GeologicalProvince::Oceanic:
+                case GeologicalProvince::Rift:
+                    terrain.rockType[i] = RockType::Igneous;
+                    break;
+                case GeologicalProvince::ActiveOrogen:
+                    if (granite())
+                        terrain.rockType[i] = RockType::Igneous;
+                    break;
+                case GeologicalProvince::AncientOrogen:
+                case GeologicalProvince::Shield:
+                    terrain.rockType[i] = granite() ? RockType::Igneous : RockType::Metamorphic;
+                    break;
+                case GeologicalProvince::Basin:
+                case GeologicalProvince::Count:
+                    terrain.rockType[i] = RockType::Sedimentary;
+                    break;
+                }
             }
         }
     }

@@ -32,6 +32,7 @@ namespace olam
         Vegetation,
         TreeCover,
         DepositId,
+        Province,
         Count,
     };
 
@@ -104,6 +105,9 @@ namespace olam
             break;
         case LayerId::DepositId:
             f(world.resources().depositId);
+            break;
+        case LayerId::Province:
+            f(world.terrain().province);
             break;
         case LayerId::Count:
             break;

@@ -17,10 +17,18 @@ namespace olam
         // Distance over which neighbouring plate base heights blend into each other.
         float boundaryBlendKm = 400.0f;
         // Width of the volcanic / metamorphic rock belt along active boundaries.
-        float beltWidthKm = 160.0f;
+        float beltWidthKm = 100.0f;
         // Half-width of the uplift zone along converging boundaries / of the depression along diverging ones.
         float mountainWidthKm = 220.0f;
         float riftWidthKm = 120.0f;
+        // Older tectonic cycle: its converging boundaries on continental crust left eroded mountain belts.
+        std::int32_t paleoPlateCount = 10;
+        float ancientBeltWidthKm = 320.0f;
+        // Size of the massifs an ancient belt is broken into.
+        float ancientMassifWavelengthKm = 450.0f;
+        // Granite intrusions in orogens and shields (noise wavelength and share of area, roughly).
+        float graniteWavelengthKm = 120.0f;
+        float graniteThreshold = 0.3f;
     };
 
     struct ElevationSettings
@@ -29,6 +37,8 @@ namespace olam
         // Per-seed variation of the land share: landFraction +/- this.
         float landFractionVariation = 0.08f;
         float mountainStrength = 0.40f;
+        // Uplift of ancient (eroded) belts: uplands and hills rather than high ranges.
+        float ancientUpliftStrength = 0.2f;
         float riftStrength = 0.15f;
         float noiseStrength = 0.45f;
         float noiseWavelengthKm = 1400.0f;
@@ -183,11 +193,17 @@ namespace olam
         visit(t.beltWidthKm);
         visit(t.mountainWidthKm);
         visit(t.riftWidthKm);
+        visit(t.paleoPlateCount);
+        visit(t.ancientBeltWidthKm);
+        visit(t.ancientMassifWavelengthKm);
+        visit(t.graniteWavelengthKm);
+        visit(t.graniteThreshold);
 
         auto &e = settings.elevation;
         visit(e.landFraction);
         visit(e.landFractionVariation);
         visit(e.mountainStrength);
+        visit(e.ancientUpliftStrength);
         visit(e.riftStrength);
         visit(e.noiseStrength);
         visit(e.noiseWavelengthKm);

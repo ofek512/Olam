@@ -69,6 +69,55 @@ OLAM_TEST(tectonics_invariants)
     OLAM_CHECK(anyMetamorphic || anySedimentary);
 }
 
+OLAM_TEST(geological_provinces)
+{
+    std::size_t ancientLand = 0;
+    std::size_t totalLand = 0;
+    for (const std::uint64_t seed : {1ull, 2ull, 3ull})
+    {
+        const auto world = test::generateWorld(seed, test::smallWorldConfig(512, 512));
+        OLAM_CHECK(world != nullptr);
+        if (!world)
+            return;
+        const auto &terrain = world->terrain();
+        double ancientHeight = 0.0;
+        double basinHeight = 0.0;
+        std::size_t ancient = 0;
+        std::size_t basin = 0;
+        for (std::size_t i = 0; i < world->tileCount(); ++i)
+        {
+            const GeologicalProvince province = terrain.province[i];
+            const RockType rock = terrain.rockType[i];
+            OLAM_CHECK(province < GeologicalProvince::Count);
+            if (province == GeologicalProvince::Basin)
+                OLAM_CHECK(rock == RockType::Sedimentary);
+            if (province == GeologicalProvince::Oceanic || province == GeologicalProvince::Rift)
+                OLAM_CHECK(rock == RockType::Igneous);
+            if (province == GeologicalProvince::AncientOrogen || province == GeologicalProvince::Shield)
+                OLAM_CHECK(rock == RockType::Metamorphic || rock == RockType::Igneous);
+
+            if (terrain.elevation[i] < 0)
+                continue;
+            ++totalLand;
+            if (province == GeologicalProvince::AncientOrogen)
+            {
+                ++ancient;
+                ancientHeight += terrain.elevation[i];
+            }
+            else if (province == GeologicalProvince::Basin)
+            {
+                ++basin;
+                basinHeight += terrain.elevation[i];
+            }
+        }
+        ancientLand += ancient;
+        // Eroded old belts still stand above the sedimentary lowlands.
+        if (ancient > 0 && basin > 0)
+            OLAM_CHECK(ancientHeight / static_cast<double>(ancient) > basinHeight / static_cast<double>(basin));
+    }
+    OLAM_CHECK(ancientLand * 50 > totalLand);
+}
+
 OLAM_TEST(elevation_invariants)
 {
     for (const std::uint64_t seed : {1ull, 2ull, 3ull})

@@ -23,7 +23,7 @@ Regions, settlement suitability, settlements, roads and factions belong to Phase
 
 | Pass            | Produces                                                         |
 | --------------- | ---------------------------------------------------------------- |
-| TectonicsPass   | `plateId`, `rockType`                                            |
+| TectonicsPass   | `plateId`, `rockType`, `province`                                |
 | ElevationPass   | `elevation`                                                      |
 | OceanPass       | `surfaceWater`, `distanceToOcean`                                |
 | TemperaturePass | `meanAnnualTemperature`                                          |
@@ -126,6 +126,12 @@ other intermediate layers.
   Converging boundaries raise mountain ranges / volcanic arcs, diverging boundaries form rifts and seas.
 - `rockType` from plate context: sedimentary (basins, lowlands), igneous (arcs, rifts, ocean floor),
   metamorphic (old mountain belts, shields).
+- **Geological history lite**: a second, older plate layout (10 plates, same warped coordinates) marks where an
+  earlier tectonic cycle's plates collided. On continental crust those zones become **ancient orogens**, broken into
+  massifs by noise and lightly uplifted into eroded uplands (Bohemian Massif, Harz, Cornwall, Appalachians).
+  Granite intrusions (noise) inside orogens and shields are igneous.
+- Persistent `province` layer (`GeologicalProvince`): Oceanic, Basin (sedimentary cover), Shield, AncientOrogen,
+  ActiveOrogen (100 km either side of converging boundaries), Rift. Rock type follows the province. Shown in F12.
 - Raw height = plate base + boundary uplift/rifting + noise detail, then a few iterations of thermal smoothing.
 - An Earth-like hypsometric curve is applied via a histogram of raw heights; this also places sea level so the
   land share equals a configurable target ± a seed-dependent variation. Tiny islands are removed. Land may touch

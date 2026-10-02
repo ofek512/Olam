@@ -30,7 +30,7 @@ namespace olam
             {"Fertility", Key::F9},
             {"Vegetation", Key::F10},
             {"Resources", Key::F11},
-            {"Geology / plates", Key::F12},
+            {"Geology (provinces / plates)", Key::F12},
             {"Distance to ocean", Key::Unknown},
             {"Tree cover", Key::Unknown},
             {"Atlas (elevation tints)", Key::Unknown},
@@ -271,9 +271,18 @@ namespace olam
             }
         }
 
+        constexpr std::array<Rgb, static_cast<std::size_t>(GeologicalProvince::Count)> kProvinceColors = {{
+            {60, 80, 130},   // Oceanic
+            {210, 190, 140}, // Basin
+            {170, 130, 175}, // Shield
+            {205, 125, 70},  // Ancient orogen
+            {190, 55, 50},   // Active orogen
+            {120, 70, 150},  // Rift
+        }};
+
+        // Provinces, with granite (igneous) intrusions darkened and plate boundaries in black.
         void colorizeGeology(const World &world, std::span<std::uint8_t> rgba)
         {
-            constexpr std::array<Rgb, 3> kRockColors = {{{205, 180, 130}, {150, 70, 60}, {130, 110, 160}}};
             const auto &terrain = world.terrain();
             for (int y = 0; y < world.height(); ++y)
             {
@@ -288,8 +297,11 @@ namespace olam
                         writePixel(rgba, i, {20, 20, 20});
                         continue;
                     }
-                    Rgb color = kRockColors[static_cast<std::size_t>(terrain.rockType[i])];
-                    color = scale(color, 0.8f + 0.3f * static_cast<float>((plate * 37u) % 16u) / 15.0f);
+                    const GeologicalProvince province = terrain.province[i];
+                    Rgb color = kProvinceColors[static_cast<std::size_t>(province)];
+                    if (terrain.rockType[i] == RockType::Igneous && province != GeologicalProvince::Oceanic &&
+                        province != GeologicalProvince::Rift)
+                        color = scale(color, 0.7f);
                     if (!terrain.elevation.empty() && isWater(world, i))
                         color = scale(color, 0.6f);
                     writePixel(rgba, i, color);
@@ -520,7 +532,7 @@ namespace olam
         case WorldView::Atlas:
             return hasElevation;
         case WorldView::Geology:
-            return !world.terrain().rockType.empty();
+            return !world.terrain().province.empty();
         case WorldView::DistanceToOcean:
             return !world.hydrology().distanceToOceanKm.empty();
         case WorldView::Temperature:

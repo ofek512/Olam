@@ -53,6 +53,7 @@ namespace olam
     {
         Layer<std::uint8_t> plateId;
         Layer<RockType> rockType;
+        Layer<GeologicalProvince> province;
         // Ground / lake-bed height in metres; sea level is 0.
         Layer<std::int16_t> elevation;
     };
