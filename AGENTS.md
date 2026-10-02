@@ -1,6 +1,7 @@
 # Project Coding Rules
 
-Full design/roadmap: [agent.MD](agent.MD).
+Full vision: [agent.MD](agent.MD). Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+World generation: [docs/WORLD_GENERATION.md](docs/WORLD_GENERATION.md). Status: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 1. Simulation code must never depend on rendering code.
 2. World generation must always be deterministic.
@@ -19,13 +20,27 @@ Full design/roadmap: [agent.MD](agent.MD).
 15. Document major architectural decisions.
 16. Ask for architectural guidance when a requested change conflicts with documented architecture.
 
+## World & determinism rules
+
+- `olam_core`, `olam_world` and `olam_worldgen` never depend on SDL (directly or transitively).
+- World data is stored as struct-of-arrays `Layer<T>`; never `std::vector<WorldTile>` as canonical storage.
+- No persistent world layer before the generation pass that produces it exists.
+- `World` owns data only; generators, renderers, simulation systems and scratch buffers live elsewhere.
+- No `std::` random engines/distributions, `std::hash` or `rand()` in deterministic code. Use `core/random`.
+- Derive subsystem seeds with `deriveSeed(seed, fixedId)`; never share RNG state between subsystems.
+- No fast-math, no float equality, no unordered reductions, no libm transcendental functions in generation.
+- Programmer errors -> `OLAM_ASSERT`; bad external input (config, files, command line) -> returned errors.
+- World and local settlement maps are separate grids and types.
+
 ## Layering
 
-`platform/` (SDL3) -> `core/` + `render/` -> world simulation -> game systems.
+`platform/` (SDL3) -> `core/` + `render/` -> `world/` -> `worldgen/` -> `tools/`, `app/`.
 Lower layers never include headers from higher layers.
 
-- `olam_core` target: pure C++20, no SDL (logging, time, input, files, math, camera). Unit-tested.
-- `olam_engine` target: SDL platform, renderer, debug rendering, `Application`.
+- `olam_core`: pure C++20 (logging, time, input, files, math, camera, assert, IDs, `Layer<T>`, hash, random).
+- `olam_world`: world data model. `olam_worldgen`: generation pipeline.
+- `olam_engine`: SDL platform, renderer, textures, debug text panels.
+- `olam_world_viewer`: world debug renderer, tile inspector. `Olam` (`src/app`): thin executable.
 
 ## Build & test (Windows, MSVC)
 
@@ -33,5 +48,7 @@ Lower layers never include headers from higher layers.
 cmake -S . -B build
 cmake --build build --config Debug
 ctest --test-dir build -C Debug --output-on-failure
-.\build\Debug\Olam.exe
+.\build\Debug\Olam.exe --seed 12345 --size 1024x512
 ```
+
+Headless (no SDL, as in Linux CI): `cmake -S . -B build-headless -DOLAM_BUILD_ENGINE=OFF`.
