@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/containers/Layer.h"
-#include "core/hash/ByteWriter.h"
+#include "core/serialization/ByteWriter.h"
 
 #include <cstdint>
 

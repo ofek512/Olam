@@ -3,7 +3,6 @@
 #include "core/logging/Log.h"
 #include "render/camera/Camera2D.h"
 #include "render/renderer/Renderer.h"
-#include "tools/world_viewer/DebugHashView.h"
 #include "world/World.h"
 
 #include <algorithm>
@@ -13,6 +12,16 @@
 
 namespace olam
 {
+
+    void WorldDebugRenderer::setView(WorldView view, const ViewOptions &options)
+    {
+        if (view != m_view || !(options == m_options))
+        {
+            m_view = view;
+            m_options = options;
+            m_dirty = true;
+        }
+    }
 
     void WorldDebugRenderer::draw(Renderer &renderer, const Camera2D &camera, const World &world)
     {
@@ -65,23 +74,11 @@ namespace olam
             return;
 
         std::vector<std::uint8_t> pixels(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4);
-        const std::uint64_t seed = world_viewer::debugViewSeed(world.seed());
-        std::size_t i = 0;
-        for (int y = 0; y < height; ++y)
-        {
-            for (int x = 0; x < width; ++x)
-            {
-                const std::uint8_t value = world_viewer::debugValue(coordinateHash(seed, x, y));
-                pixels[i++] = value;
-                pixels[i++] = value;
-                pixels[i++] = value;
-                pixels[i++] = 255;
-            }
-        }
+        colorizeView(world, m_view, m_options, pixels);
         m_texture.update(pixels);
 
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-        logging::info(LogCategory::Render, "Rebuilt '{}' view {}x{} in {:.1f} ms", kViewName, width, height, ms);
+        logging::info(LogCategory::Render, "Rebuilt '{}' view {}x{} in {:.1f} ms", viewInfo(m_view).name, width, height, ms);
     }
 
 } // namespace olam

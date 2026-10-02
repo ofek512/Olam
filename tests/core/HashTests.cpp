@@ -1,6 +1,6 @@
 #include "TestFramework.h"
 
-#include "core/hash/ByteWriter.h"
+#include "core/serialization/ByteWriter.h"
 #include "core/hash/LayerHash.h"
 #include "core/hash/XxHash64.h"
 

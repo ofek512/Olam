@@ -1,23 +1,49 @@
 #pragma once
 
+#include "world/World.h"
+
+#include <cstddef>
 #include <cstdint>
 #include <span>
+#include <string>
 #include <string_view>
 
 namespace olam
 {
 
-    class World;
+    // Every persistent world layer. Values are persisted in save files; append only, never reorder.
+    enum class LayerId : std::uint8_t
+    {
+        Count,
+    };
 
     struct WorldLayerDescriptor
     {
+        LayerId id;
         std::string_view name;
-        std::string_view valueType;
         std::string_view units;
-        std::uint64_t (*hash)(const World &world);
     };
 
-    // Every persistent world layer, in a fixed order used by hashing, saving and debug views.
+    // All layers in a fixed order used by hashing, saving, the inspector and debug views.
     std::span<const WorldLayerDescriptor> worldLayerDescriptors();
+
+    // Calls f(layer) with the typed Layer<T> stored for id.
+    template <typename WorldT, typename F>
+    void visitLayer(WorldT &world, LayerId id, F &&f)
+    {
+        (void)world;
+        (void)f;
+        switch (id)
+        {
+        case LayerId::Count:
+            break;
+        }
+    }
+
+    // A layer exists once the pass producing it has run.
+    bool isLayerPresent(const World &world, LayerId id);
+
+    // Human-readable value of one tile of a present layer, including units.
+    std::string formatLayerValue(const World &world, LayerId id, std::size_t index);
 
 } // namespace olam

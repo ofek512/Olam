@@ -61,6 +61,7 @@ add_library(olam_core STATIC
     src/core/files/FileSystem.cpp
     src/core/debug/Assert.cpp
     src/core/hash/XxHash64.cpp
+    src/core/noise/Noise.cpp
     src/core/random/Pcg32.cpp
     src/core/random/Seed.cpp
     src/render/camera/Camera2D.cpp
@@ -80,6 +81,7 @@ add_library(olam_world STATIC
     src/world/TileView.cpp
     src/world/WorldLayers.cpp
     src/world/WorldHash.cpp
+    src/world/WorldStats.cpp
 )
 target_link_libraries(olam_world
     PUBLIC olam_core
@@ -92,6 +94,7 @@ target_link_libraries(olam_world
 add_library(olam_worldgen STATIC
     src/worldgen/WorldGenContext.cpp
     src/worldgen/WorldGenerator.cpp
+    src/worldgen/DefaultPipeline.cpp
 )
 target_link_libraries(olam_worldgen
     PUBLIC olam_world
@@ -115,6 +118,7 @@ if(OLAM_BUILD_ENGINE)
 
     add_library(olam_world_viewer STATIC
         src/tools/world_viewer/WorldDebugRenderer.cpp
+        src/tools/world_viewer/WorldViews.cpp
         src/tools/world_viewer/TileInspector.cpp
     )
     target_link_libraries(olam_world_viewer

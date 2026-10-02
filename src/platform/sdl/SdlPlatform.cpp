@@ -29,6 +29,18 @@ namespace olam
                 return Key::R;
             case SDL_SCANCODE_N:
                 return Key::N;
+            case SDL_SCANCODE_H:
+                return Key::H;
+            case SDL_SCANCODE_I:
+                return Key::I;
+            case SDL_SCANCODE_L:
+                return Key::L;
+            case SDL_SCANCODE_TAB:
+                return Key::Tab;
+            case SDL_SCANCODE_LCTRL:
+                return Key::LeftCtrl;
+            case SDL_SCANCODE_RCTRL:
+                return Key::RightCtrl;
             case SDL_SCANCODE_UP:
                 return Key::Up;
             case SDL_SCANCODE_DOWN:

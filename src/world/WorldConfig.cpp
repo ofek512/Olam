@@ -37,6 +37,11 @@ namespace olam
         if (!(config.latitudeNorth > config.latitudeSouth))
             return std::format("north latitude {} must be greater than south latitude {}", config.latitudeNorth,
                                config.latitudeSouth);
+        return validateGenerationSettings(config.generation);
+    }
+
+    std::optional<std::string> validateGenerationSettings(const WorldGenSettings &)
+    {
         return std::nullopt;
     }
 

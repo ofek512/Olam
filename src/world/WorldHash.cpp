@@ -1,6 +1,7 @@
 #include "world/WorldHash.h"
 
-#include "core/hash/ByteWriter.h"
+#include "core/hash/LayerHash.h"
+#include "core/serialization/ByteWriter.h"
 #include "world/World.h"
 #include "world/WorldLayers.h"
 
@@ -11,23 +12,18 @@ namespace olam
     {
         WorldHash result;
 
-        const WorldConfig &config = world.config();
         ByteWriter writer;
-        writer.write(static_cast<std::int32_t>(config.width));
-        writer.write(static_cast<std::int32_t>(config.height));
-        writer.write(config.tileSizeMeters);
-        writer.write(config.latitudeNorth);
-        writer.write(config.latitudeSouth);
-        writer.write(config.seaLevelMeters);
+        visitWorldConfig(world.config(), [&](const auto &value) { writer.write(value); });
         writer.write(world.seed());
 
-        const auto descriptors = worldLayerDescriptors();
-        writer.write(static_cast<std::uint32_t>(descriptors.size()));
-        for (const WorldLayerDescriptor &descriptor : descriptors)
+        for (const WorldLayerDescriptor &descriptor : worldLayerDescriptors())
         {
-            const std::uint64_t layerHash = descriptor.hash(world);
+            if (!isLayerPresent(world, descriptor.id))
+                continue;
+            std::uint64_t layerHash = 0;
+            visitLayer(world, descriptor.id, [&](const auto &layer) { layerHash = hashLayer(layer); });
             result.layers.push_back({descriptor.name, layerHash});
-            writer.write(descriptor.name);
+            writer.write(descriptor.id);
             writer.write(layerHash);
         }
 

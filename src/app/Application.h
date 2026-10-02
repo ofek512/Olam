@@ -5,6 +5,7 @@
 #include "core/time/SimulationClock.h"
 #include "platform/sdl/SdlPlatform.h"
 #include "render/camera/Camera2D.h"
+#include "tools/world_viewer/WorldViews.h"
 #include "world/World.h"
 #include "world/WorldConfig.h"
 #include "worldgen/WorldGenerator.h"
@@ -12,6 +13,8 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <string>
+#include <vector>
 
 namespace olam
 {
@@ -49,6 +52,8 @@ namespace olam
 
         void updateCamera(double deltaTime);
         bool generateWorld(std::uint64_t seed);
+        void onWorldChanged();
+        void selectView(WorldView view);
         void drawOverlay();
 
         ApplicationConfig m_config;
@@ -62,9 +67,14 @@ namespace olam
         WorldGenerator m_worldGenerator;
         std::unique_ptr<World> m_world;
         std::unique_ptr<WorldDebugRenderer> m_worldRenderer;
+        WorldView m_view = WorldView::Terrain;
+        ViewOptions m_viewOptions;
+        std::optional<WorldCoord> m_pinnedTile;
+        std::vector<std::string> m_statsLines;
 
         bool m_running = false;
         bool m_showDebugOverlay = true;
+        bool m_showStats = false;
     };
 
 } // namespace olam

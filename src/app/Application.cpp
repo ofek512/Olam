@@ -5,6 +5,8 @@
 #include "render/renderer/Renderer.h"
 #include "tools/world_viewer/TileInspector.h"
 #include "tools/world_viewer/WorldDebugRenderer.h"
+#include "world/WorldStats.h"
+#include "worldgen/DefaultPipeline.h"
 
 #include <cmath>
 #include <format>
@@ -32,11 +34,18 @@ namespace olam
             return (static_cast<std::uint64_t>(device()) << 32) | device();
         }
 
+        bool contains(const World &world, Vec2 position)
+        {
+            return position.x >= 0.0f && position.y >= 0.0f && position.x < static_cast<float>(world.width()) &&
+                   position.y < static_cast<float>(world.height());
+        }
+
     } // namespace
 
     Application::Application(ApplicationConfig config)
         : m_config(std::move(config)), m_simulationClock(m_config.simulationTicksPerSecond, m_config.maxSimulationTicksPerFrame)
     {
+        addDefaultPasses(m_worldGenerator);
     }
 
     Application::~Application()
@@ -105,9 +114,28 @@ namespace olam
         }
 
         m_world = std::move(result.world);
-        m_worldRenderer->invalidate();
+        onWorldChanged();
         logging::info(LogCategory::Core, "World seed {} ({} x {})", seed, m_world->width(), m_world->height());
         return true;
+    }
+
+    void Application::onWorldChanged()
+    {
+        if (!isViewAvailable(*m_world, m_view))
+            m_view = defaultView(*m_world);
+        if (m_pinnedTile && !m_world->isValid(*m_pinnedTile))
+            m_pinnedTile.reset();
+        m_statsLines = describeWorldStats(*m_world);
+        m_worldRenderer->setView(m_view, m_viewOptions);
+        m_worldRenderer->invalidate();
+    }
+
+    void Application::selectView(WorldView view)
+    {
+        if (!isViewAvailable(*m_world, view))
+            return;
+        m_view = view;
+        m_worldRenderer->setView(m_view, m_viewOptions);
     }
 
     void Application::processInput()
@@ -132,6 +160,37 @@ namespace olam
 
         if (m_input.wasPressed(Key::N))
             generateWorld(randomSeed());
+
+        const bool shift = m_input.isDown(Key::LeftShift) || m_input.isDown(Key::RightShift);
+        if (m_input.wasPressed(Key::Tab))
+            selectView(cycleView(*m_world, m_view, shift ? -1 : 1));
+
+        for (int i = 0; i < static_cast<int>(WorldView::Count); ++i)
+        {
+            const auto view = static_cast<WorldView>(i);
+            const Key shortcut = viewInfo(view).shortcut;
+            if (shortcut != Key::Unknown && m_input.wasPressed(shortcut))
+                selectView(view);
+        }
+
+        if (m_input.wasPressed(Key::H))
+        {
+            m_viewOptions.hillshade = !m_viewOptions.hillshade;
+            m_worldRenderer->setView(m_view, m_viewOptions);
+        }
+
+        if (m_input.wasPressed(Key::I))
+            m_showStats = !m_showStats;
+
+        if (m_input.wasPressed(MouseButton::Left))
+        {
+            const Vec2 mouseWorld = m_camera.screenToWorld(m_input.mousePosition());
+            if (m_pinnedTile || !contains(*m_world, mouseWorld))
+                m_pinnedTile.reset();
+            else
+                m_pinnedTile = WorldCoord{static_cast<std::int32_t>(std::floor(mouseWorld.x)),
+                                          static_cast<std::int32_t>(std::floor(mouseWorld.y))};
+        }
     }
 
     void Application::update(double deltaTime)
@@ -182,13 +241,17 @@ namespace olam
         m_worldRenderer->draw(*m_renderer, m_camera, *m_world);
 
         const Vec2 mouseWorld = m_camera.screenToWorld(m_input.mousePosition());
-        const bool mouseInWorld = mouseWorld.x >= 0.0f && mouseWorld.y >= 0.0f &&
-                                  mouseWorld.x < static_cast<float>(m_world->width()) &&
-                                  mouseWorld.y < static_cast<float>(m_world->height());
-        if (mouseInWorld && m_camera.zoom() >= kTileHighlightMinZoom)
+        if (contains(*m_world, mouseWorld) && m_camera.zoom() >= kTileHighlightMinZoom)
         {
             const Vec2 tileScreen = m_camera.worldToScreen({std::floor(mouseWorld.x), std::floor(mouseWorld.y)});
             m_renderer->drawRect({tileScreen.x, tileScreen.y, m_camera.zoom(), m_camera.zoom()}, Color{255, 80, 80});
+        }
+        if (m_pinnedTile)
+        {
+            const Vec2 tileScreen = m_camera.worldToScreen(
+                {static_cast<float>(m_pinnedTile->x), static_cast<float>(m_pinnedTile->y)});
+            const float size = std::max(m_camera.zoom(), 4.0f);
+            m_renderer->drawRect({tileScreen.x, tileScreen.y, size, size}, Color{255, 255, 0});
         }
 
         if (m_showDebugOverlay)
@@ -209,20 +272,34 @@ namespace olam
             std::format("Seed {}", m_world->seed()),
             std::format("World {} x {}   {:.2f} km/tile", world.width, world.height, world.tileSizeMeters / 1000.0),
             std::format("Latitude {:.1f} to {:.1f} deg (N+)", world.latitudeNorth, world.latitudeSouth),
-            std::format("View: {}", WorldDebugRenderer::kViewName),
+            std::format("View: {}{}", viewInfo(m_view).name, m_viewOptions.hillshade ? "  (hillshade)" : ""),
             std::format("Camera ({:.1f}, {:.1f})   zoom {:.2f} px/tile", m_camera.position().x, m_camera.position().y,
                         m_camera.zoom()),
             "",
             "WASD/Arrows move  Shift fast  Wheel zoom  MMB drag",
-            "R regenerate  N new seed  Space pause  . step",
+            "R regenerate  N new seed  Tab/F1-F12 views  H shade",
+            "LMB pin tile  I stats  Space pause  . step",
             "` overlay  Esc quit",
         };
         drawTextPanel(*m_renderer, {4.0f, 4.0f}, lines);
 
-        const std::vector<std::string> inspector =
-            describeTile(*m_world, m_camera.screenToWorld(m_input.mousePosition()));
+        InspectorOptions inspectorOptions;
+        inspectorOptions.pinned = m_pinnedTile.has_value();
+        inspectorOptions.showDebugHash = m_view == WorldView::HashDebug;
+        const Vec2 inspected = m_pinnedTile ? Vec2{static_cast<float>(m_pinnedTile->x) + 0.5f,
+                                                   static_cast<float>(m_pinnedTile->y) + 0.5f}
+                                            : m_camera.screenToWorld(m_input.mousePosition());
+        const std::vector<std::string> inspector = describeTile(*m_world, inspected, inspectorOptions);
         const Vec2 size = measureTextPanel(inspector);
         drawTextPanel(*m_renderer, {m_camera.viewportSize().x - size.x - 4.0f, 4.0f}, inspector);
+
+        if (m_showStats)
+        {
+            std::vector<std::string> stats = {"WORLD STATISTICS"};
+            stats.insert(stats.end(), m_statsLines.begin(), m_statsLines.end());
+            const Vec2 statsSize = measureTextPanel(stats);
+            drawTextPanel(*m_renderer, {4.0f, m_camera.viewportSize().y - statsSize.y - 4.0f}, stats);
+        }
     }
 
 } // namespace olam

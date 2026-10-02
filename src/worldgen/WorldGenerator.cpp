@@ -2,6 +2,7 @@
 
 #include "core/debug/Assert.h"
 #include "core/logging/Log.h"
+#include "world/WorldStats.h"
 #include "worldgen/WorldGenContext.h"
 
 #include <chrono>
@@ -59,6 +60,8 @@ namespace olam
 
         logging::info(LogCategory::WorldGen, "World generation complete: seed {}, {} x {} tiles, {} passes, {:.1f} ms",
                       seed, config.width, config.height, m_passes.size(), millisecondsSince(totalStart));
+        for (const std::string &line : describeWorldStats(*world))
+            logging::info(LogCategory::WorldGen, "  {}", line);
 
         result.world = std::move(world);
         return result;

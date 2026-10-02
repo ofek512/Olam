@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/hash/XxHash64.h"
+#include "core/types/StrongId.h"
 
 #include <bit>
 #include <cstddef>
@@ -39,6 +40,14 @@ namespace olam
             write(static_cast<std::underlying_type_t<T>>(value));
         }
 
+        template <typename Tag>
+        void write(StrongId<Tag> id)
+        {
+            write(id.value);
+        }
+
+        void write(bool value) { write(static_cast<std::uint8_t>(value ? 1 : 0)); }
+        void write(float value) { write(std::bit_cast<std::uint32_t>(value)); }
         void write(double value) { write(std::bit_cast<std::uint64_t>(value)); }
 
         void write(std::string_view text)
@@ -48,6 +57,7 @@ namespace olam
         }
 
         std::span<const std::uint8_t> bytes() const { return m_bytes; }
+        std::size_t size() const { return m_bytes.size(); }
 
         std::uint64_t hash(std::uint64_t seed = 0) const { return xxHash64Bytes(m_bytes.data(), m_bytes.size(), seed); }
 
