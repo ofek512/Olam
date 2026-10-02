@@ -84,6 +84,7 @@ namespace olam
 
     struct GeographyData
     {
+        Layer<SoilType> soil;
     };
 
 } // namespace olam

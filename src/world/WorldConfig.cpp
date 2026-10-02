@@ -80,6 +80,12 @@ namespace olam
               hydro.majorRiverDischarge < 1.0e7f && hydro.floodplainBaseKm >= 0.0f &&
               hydro.floodplainKmPerSqrtDischarge >= 0.0f && hydro.floodplainMaxRiseM > 0.0f))
             return "hydrology settings out of range";
+        const auto &soil = settings.soil;
+        if (!(soil.rockySlope > 0.0f && soil.rockyHardRockSlope > 0.0f && soil.rockyElevationM > 0.0f &&
+              soil.alluvialFloodplain > 0.0f && soil.alluvialFloodplain <= 1.0f && soil.peatMinAridity > 0.0f &&
+              soil.peatMaxSlope >= 0.0f && soil.lateriteMinAridity >= 0.0f && soil.sandyMaxAridity >= 0.0f &&
+              soil.textureNoise >= 0.0f && soil.textureNoiseWavelengthKm > 0.0f))
+            return "soil settings out of range";
         return std::nullopt;
     }
 

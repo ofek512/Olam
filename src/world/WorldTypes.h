@@ -53,4 +53,25 @@ namespace olam
 
     std::string_view toString(RiverClass riverClass);
 
+    enum class SoilType : std::uint8_t
+    {
+        // Water tiles.
+        None,
+        // Thin soil on steep or high ground.
+        Rocky,
+        Sandy,
+        Loam,
+        Clay,
+        // River sediment on floodplains; the most fertile.
+        Alluvial,
+        // Waterlogged organic soil in cool, flat, wet places.
+        Peat,
+        Permafrost,
+        // Leached tropical soil.
+        Laterite,
+        Count,
+    };
+
+    std::string_view toString(SoilType soil);
+
 } // namespace olam

@@ -24,6 +24,7 @@ namespace olam
             {LayerId::Discharge, "Discharge", "m3/s"},
             {LayerId::RiverId, "River", ""},
             {LayerId::LakeId, "Lake", ""},
+            {LayerId::Soil, "Soil", ""},
         };
 
         constexpr std::string_view kDirectionNames[] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
@@ -96,6 +97,8 @@ namespace olam
             const Lake &lake = world.hydrology().lakes[lakeId.index()];
             return std::format("#{} surface {} m, {} tiles", lakeId.value, lake.surfaceElevation, lake.tileCount);
         }
+        case LayerId::Soil:
+            return std::string(toString(world.geography().soil[index]));
         case LayerId::Count:
             break;
         }

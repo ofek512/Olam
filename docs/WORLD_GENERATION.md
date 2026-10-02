@@ -168,7 +168,9 @@ other intermediate layers.
 ### Soil, biome, fertility, vegetation
 
 - Soil (rocky, sandy, loam, clay, alluvial, peat, permafrost, laterite) from rock type, slope, climate and
-  floodplains.
+  floodplains. Rules in priority order: permafrost (cold) -> rocky (steep / high / steep hard rock) -> alluvial
+  (strong floodplain) -> peat (wet, flat, cool) -> laterite (hot and humid) -> sandy (arid) -> texture
+  (sedimentary / wet -> clay, igneous / dry -> sand, plus regional noise) -> loam.
 - Biome from a Whittaker-style temperature × moisture table (14 biomes); alpine by temperature/tree line,
   wetland on flat, very wet land near rivers and lakes. Water is not a biome.
 - Fertility = product of climate, terrain, water access and soil factors, with a floodplain bonus scaled by

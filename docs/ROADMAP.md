@@ -29,7 +29,7 @@ Short status checklist. Full vision and rationale: [agent.MD](../agent.MD).
 - [x] 3C Temperature
 - [x] 3D Rainfall / moisture
 - [x] 3E Hydrology (rivers, lakes)
-- [ ] Soil
+- [x] Soil
 - [ ] 3F Biomes
 - [ ] 3G Fertility
 - [ ] 3H Vegetation

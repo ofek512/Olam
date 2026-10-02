@@ -71,4 +71,32 @@ namespace olam
         return "?";
     }
 
+    std::string_view toString(SoilType soil)
+    {
+        switch (soil)
+        {
+        case SoilType::None:
+            return "None";
+        case SoilType::Rocky:
+            return "Rocky";
+        case SoilType::Sandy:
+            return "Sandy";
+        case SoilType::Loam:
+            return "Loam";
+        case SoilType::Clay:
+            return "Clay";
+        case SoilType::Alluvial:
+            return "Alluvial";
+        case SoilType::Peat:
+            return "Peat";
+        case SoilType::Permafrost:
+            return "Permafrost";
+        case SoilType::Laterite:
+            return "Laterite";
+        case SoilType::Count:
+            break;
+        }
+        return "?";
+    }
+
 } // namespace olam

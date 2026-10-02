@@ -89,9 +89,30 @@ namespace olam
         float riverDischarge = 50.0f;
         float majorRiverDischarge = 300.0f;
         // Floodplain half-width = base + perSqrtDischarge * sqrt(discharge); fades out over maxRiseM above the river.
-        float floodplainBaseKm = 2.0f;
-        float floodplainKmPerSqrtDischarge = 0.3f;
+        float floodplainBaseKm = 3.0f;
+        float floodplainKmPerSqrtDischarge = 0.5f;
         float floodplainMaxRiseM = 30.0f;
+    };
+
+    struct SoilSettings
+    {
+        float permafrostMaxC = -4.0f;
+        // Thin rocky soil above this slope (any rock), above the hard-rock slope (igneous / metamorphic) or height.
+        float rockySlope = 0.15f;
+        float rockyHardRockSlope = 0.08f;
+        float rockyElevationM = 2500.0f;
+        float alluvialFloodplain = 0.5f;
+        // Peat: aridity index at least this, nearly flat, cool.
+        float peatMinAridity = 1.4f;
+        float peatMaxSlope = 0.01f;
+        float peatMaxC = 10.0f;
+        float lateriteMinC = 20.0f;
+        float lateriteMinAridity = 0.8f;
+        // Deserts are sandy below this aridity index.
+        float sandyMaxAridity = 0.2f;
+        // Regional variation between sandy, loam and clay.
+        float textureNoise = 0.8f;
+        float textureNoiseWavelengthKm = 150.0f;
     };
 
     // Tuning values for every generation pass. Part of WorldConfig, so they are validated, hashed and saved.
@@ -104,6 +125,7 @@ namespace olam
         TemperatureSettings temperature;
         RainfallSettings rainfall;
         HydrologySettings hydrology;
+        SoilSettings soil;
     };
 
     // Calls visit(field) for every setting in a fixed order (hashing, saving, loading).
@@ -163,6 +185,21 @@ namespace olam
         visit(hydro.floodplainBaseKm);
         visit(hydro.floodplainKmPerSqrtDischarge);
         visit(hydro.floodplainMaxRiseM);
+
+        auto &soil = settings.soil;
+        visit(soil.permafrostMaxC);
+        visit(soil.rockySlope);
+        visit(soil.rockyHardRockSlope);
+        visit(soil.rockyElevationM);
+        visit(soil.alluvialFloodplain);
+        visit(soil.peatMinAridity);
+        visit(soil.peatMaxSlope);
+        visit(soil.peatMaxC);
+        visit(soil.lateriteMinC);
+        visit(soil.lateriteMinAridity);
+        visit(soil.sandyMaxAridity);
+        visit(soil.textureNoise);
+        visit(soil.textureNoiseWavelengthKm);
     }
 
     std::optional<std::string> validateGenerationSettings(const WorldGenSettings &settings);

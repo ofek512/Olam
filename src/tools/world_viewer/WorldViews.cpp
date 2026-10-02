@@ -230,6 +230,38 @@ namespace olam
             {255.0f, {30, 90, 150}},
         }};
 
+        constexpr std::array<Rgb, static_cast<std::size_t>(SoilType::Count)> kSoilColors = {{
+            {30, 45, 80},    // None (water)
+            {125, 120, 115}, // Rocky
+            {230, 205, 140}, // Sandy
+            {140, 105, 65},  // Loam
+            {175, 90, 60},   // Clay
+            {70, 60, 40},    // Alluvial
+            {60, 75, 55},    // Peat
+            {200, 215, 225}, // Permafrost
+            {190, 70, 35},   // Laterite
+        }};
+
+        // One colour per enum value; land is optionally hillshaded, water uses the colour of value 0.
+        template <typename Enum, std::size_t N>
+        void colorizeCategories(const World &world, const Layer<Enum> &layer, const std::array<Rgb, N> &colors,
+                                const ViewOptions &options, std::span<std::uint8_t> rgba)
+        {
+            for (int y = 0; y < world.height(); ++y)
+            {
+                for (int x = 0; x < world.width(); ++x)
+                {
+                    const std::size_t i = layer.index(x, y);
+                    Rgb color = colors[static_cast<std::size_t>(layer[i])];
+                    if (isWater(world, i))
+                        color = colors[0];
+                    else if (options.hillshade)
+                        color = scale(color, hillshade(world, x, y));
+                    writePixel(rgba, i, color);
+                }
+            }
+        }
+
         // Muted land with the whole drainage network: faint below the stream threshold, then by river class.
         void colorizeHydrology(const World &world, const ViewOptions &options, std::span<std::uint8_t> rgba)
         {
@@ -296,6 +328,8 @@ namespace olam
             return !world.climate().moisture.empty();
         case WorldView::Hydrology:
             return !world.hydrology().discharge.empty();
+        case WorldView::Soil:
+            return !world.geography().soil.empty();
         case WorldView::HashDebug:
             return true;
         default:
@@ -367,6 +401,9 @@ namespace olam
         }
         case WorldView::Hydrology:
             colorizeHydrology(world, options, rgba);
+            break;
+        case WorldView::Soil:
+            colorizeCategories(world, world.geography().soil, kSoilColors, options, rgba);
             break;
         case WorldView::HashDebug:
         default:

@@ -141,3 +141,34 @@ OLAM_TEST(hydrology_entities_are_consistent)
         OLAM_CHECK(hydrology.surfaceWater[world->index(lake.outlet)] == SurfaceWater::Land);
     }
 }
+
+OLAM_TEST(soil_invariants)
+{
+    const auto world = test::generateWorld(42, test::smallWorldConfig(512, 256));
+    OLAM_CHECK(world != nullptr);
+    if (!world)
+        return;
+    const auto &soil = world->geography().soil;
+    const auto &water = world->hydrology().surfaceWater;
+    std::size_t counts[static_cast<std::size_t>(SoilType::Count)] = {};
+    for (std::size_t i = 0; i < world->tileCount(); ++i)
+    {
+        OLAM_CHECK(soil[i] < SoilType::Count);
+        OLAM_CHECK((water[i] == SurfaceWater::Land) == (soil[i] != SoilType::None));
+        ++counts[static_cast<std::size_t>(soil[i])];
+        if (soil[i] == SoilType::Permafrost)
+            OLAM_CHECK(world->climate().meanAnnualTemperature[i] <= -40);
+    }
+    // Most river tiles sit on alluvial soil unless steep, frozen or high.
+    std::size_t riverTiles = 0;
+    std::size_t alluvialRiverTiles = 0;
+    for (std::size_t i = 0; i < world->tileCount(); ++i)
+    {
+        if (!world->hydrology().riverId[i].isValid())
+            continue;
+        ++riverTiles;
+        alluvialRiverTiles += soil[i] == SoilType::Alluvial ? 1u : 0u;
+    }
+    OLAM_CHECK(riverTiles > 0 && alluvialRiverTiles * 2 > riverTiles);
+    OLAM_CHECK(counts[static_cast<std::size_t>(SoilType::Loam)] > 0);
+}

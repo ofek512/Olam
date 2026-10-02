@@ -26,6 +26,7 @@ namespace olam
         Discharge,
         RiverId,
         LakeId,
+        Soil,
         Count,
     };
 
@@ -80,6 +81,9 @@ namespace olam
             break;
         case LayerId::LakeId:
             f(world.hydrology().lakeId);
+            break;
+        case LayerId::Soil:
+            f(world.geography().soil);
             break;
         case LayerId::Count:
             break;
