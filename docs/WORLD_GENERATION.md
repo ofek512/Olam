@@ -212,8 +212,9 @@ other intermediate layers.
 ## Debug viewer
 
 - One texture per view, 1 texel = 1 tile, nearest filtering, rebuilt only when the world or view changes.
-- Views: Tab / Shift+Tab cycle; F1 Terrain (atlas tints, H toggles hillshading), F2 Elevation,
+- Views: Tab / Shift+Tab cycle; F1 Terrain (natural, satellite-like colours from biome, vegetation, moisture and
+  snow; H toggles hillshading), F2 Elevation,
   F3 Temperature, F4 Rainfall, F5 Moisture, F6 Biome, F7 Hydrology, F8 Soil, F9 Fertility, F10 Vegetation,
-  F11 Resources, F12 Geology/Plates; Tab-only: distance to ocean, tree cover, hash debug.
+  F11 Resources, F12 Geology/Plates; Tab-only: distance to ocean, tree cover, atlas (elevation tints), hash debug.
 - Rivers are baked into the textures and drawn as lines (width by class) when zoomed in.
 - Tile inspector shows only fields of layers that actually exist; left-click pins a tile.

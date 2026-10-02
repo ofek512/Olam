@@ -33,6 +33,7 @@ namespace olam
             {"Geology / plates", Key::F12},
             {"Distance to ocean", Key::Unknown},
             {"Tree cover", Key::Unknown},
+            {"Atlas (elevation tints)", Key::Unknown},
             {"Hash debug", Key::Unknown},
         }};
 
@@ -114,7 +115,7 @@ namespace olam
             return std::clamp(0.4f + 1.04f * lambert, 0.45f, 1.3f);
         }
 
-        void colorizeTerrain(const World &world, const ViewOptions &options, std::span<std::uint8_t> rgba)
+        void colorizeAtlas(const World &world, const ViewOptions &options, std::span<std::uint8_t> rgba)
         {
             const auto &elevation = world.terrain().elevation;
             for (int y = 0; y < world.height(); ++y)
@@ -130,6 +131,122 @@ namespace olam
                         continue;
                     }
                     Rgb color = sampleRamp(kLandTints, meters);
+                    if (options.hillshade)
+                        color = scale(color, hillshade(world, x, y));
+                    riverColor(world, i, color);
+                    writePixel(rgba, i, color);
+                }
+            }
+        }
+
+        // Bare ground seen where plants are sparse.
+        Rgb groundColor(Biome biome)
+        {
+            switch (biome)
+            {
+            case Biome::HotDesert:
+                return {222, 196, 140};
+            case Biome::ColdDesert:
+                return {190, 176, 146};
+            case Biome::Ice:
+                return {240, 244, 248};
+            case Biome::Tundra:
+                return {150, 146, 122};
+            case Biome::Alpine:
+                return {140, 134, 126};
+            case Biome::Savanna:
+            case Biome::Shrubland:
+                return {192, 166, 116};
+            default:
+                return {140, 120, 90};
+            }
+        }
+
+        // Canopy colour of forests in each climate.
+        Rgb canopyColor(Biome biome)
+        {
+            switch (biome)
+            {
+            case Biome::BorealForest:
+                return {38, 70, 50};
+            case Biome::TemperateRainforest:
+                return {30, 80, 45};
+            case Biome::TropicalRainforest:
+                return {25, 85, 35};
+            case Biome::TropicalDryForest:
+                return {78, 102, 46};
+            case Biome::Savanna:
+            case Biome::Shrubland:
+                return {96, 106, 58};
+            default:
+                return {55, 95, 45};
+            }
+        }
+
+        // Share of the ground covered by grass, shrubs or trees.
+        float plantCover(VegetationType vegetation)
+        {
+            switch (vegetation)
+            {
+            case VegetationType::Barren:
+                return 0.05f;
+            case VegetationType::Scrub:
+                return 0.45f;
+            case VegetationType::Grass:
+                return 0.9f;
+            default:
+                return 1.0f;
+            }
+        }
+
+        constexpr std::array<ColorStop, 4> kGrassByAridity = {{
+            {0.1f, {210, 190, 125}},
+            {0.35f, {190, 180, 110}},
+            {0.9f, {115, 150, 72}},
+            {1.6f, {82, 132, 60}},
+        }};
+
+        // Satellite-like colour of a land tile from biome, vegetation, moisture and temperature.
+        Rgb naturalLandColor(const World &world, std::size_t i)
+        {
+            const auto &geography = world.geography();
+            const Biome biome = geography.biome[i];
+            const float celsius = static_cast<float>(world.climate().meanAnnualTemperature[i]) / 10.0f;
+            const float aridity = static_cast<float>(world.climate().moisture[i]) / 255.0f * 2.0f;
+
+            Rgb grass = sampleRamp(kGrassByAridity, aridity);
+            if (biome == Biome::Tundra || biome == Biome::Alpine)
+                grass = mix(grass, {140, 145, 112}, 0.6f);
+            Rgb color = mix(groundColor(biome), grass, plantCover(geography.vegetation[i]));
+            color = mix(color, canopyColor(biome), static_cast<float>(geography.treeCover[i]) / 100.0f);
+            if (biome == Biome::Wetland)
+                color = mix(color, {72, 104, 82}, 0.5f);
+
+            // Lasting snow on ice and cold heights.
+            const float snow = biome == Biome::Ice ? 1.0f : std::clamp((-2.0f - celsius) / 6.0f, 0.0f, 1.0f);
+            return mix(color, {245, 248, 250}, snow);
+        }
+
+        void colorizeTerrain(const World &world, const ViewOptions &options, std::span<std::uint8_t> rgba)
+        {
+            if (world.geography().vegetation.empty())
+            {
+                colorizeAtlas(world, options, rgba);
+                return;
+            }
+            const auto &elevation = world.terrain().elevation;
+            for (int y = 0; y < world.height(); ++y)
+            {
+                for (int x = 0; x < world.width(); ++x)
+                {
+                    const std::size_t i = elevation.index(x, y);
+                    if (isWater(world, i))
+                    {
+                        const bool lake = world.hydrology().surfaceWater[i] == SurfaceWater::Lake;
+                        writePixel(rgba, i, lake ? kLakeColor : sampleRamp(kSeaTints, static_cast<float>(elevation[i])));
+                        continue;
+                    }
+                    Rgb color = naturalLandColor(world, i);
                     if (options.hillshade)
                         color = scale(color, hillshade(world, x, y));
                     riverColor(world, i, color);
@@ -400,6 +517,7 @@ namespace olam
         {
         case WorldView::Terrain:
         case WorldView::Elevation:
+        case WorldView::Atlas:
             return hasElevation;
         case WorldView::Geology:
             return !world.terrain().rockType.empty();
@@ -459,6 +577,9 @@ namespace olam
         {
         case WorldView::Terrain:
             colorizeTerrain(world, options, rgba);
+            break;
+        case WorldView::Atlas:
+            colorizeAtlas(world, options, rgba);
             break;
         case WorldView::Elevation:
             colorizeElevation(world, options, rgba);

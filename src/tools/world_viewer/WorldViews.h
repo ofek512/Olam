@@ -27,6 +27,7 @@ namespace olam
         Geology,
         DistanceToOcean,
         TreeCover,
+        Atlas,
         HashDebug,
         Count,
     };
