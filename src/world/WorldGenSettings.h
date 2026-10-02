@@ -103,8 +103,8 @@ namespace olam
         float rockyElevationM = 2500.0f;
         float alluvialFloodplain = 0.5f;
         // Peat: aridity index at least this, nearly flat, cool.
-        float peatMinAridity = 1.4f;
-        float peatMaxSlope = 0.01f;
+        float peatMinAridity = 1.6f;
+        float peatMaxSlope = 0.005f;
         float peatMaxC = 10.0f;
         float lateriteMinC = 20.0f;
         float lateriteMinAridity = 0.8f;
@@ -113,6 +113,17 @@ namespace olam
         // Regional variation between sandy, loam and clay.
         float textureNoise = 0.8f;
         float textureNoiseWavelengthKm = 150.0f;
+    };
+
+    struct BiomeSettings
+    {
+        // Above the tree line: high and cold.
+        float alpineMinElevationM = 1000.0f;
+        float alpineMaxC = 2.0f;
+        // Wetland on nearly flat, wet ground on strong floodplains, next to lakes, or on peat.
+        float wetlandMaxSlope = 0.005f;
+        float wetlandMinAridity = 1.0f;
+        float wetlandFloodplain = 0.8f;
     };
 
     // Tuning values for every generation pass. Part of WorldConfig, so they are validated, hashed and saved.
@@ -126,6 +137,7 @@ namespace olam
         RainfallSettings rainfall;
         HydrologySettings hydrology;
         SoilSettings soil;
+        BiomeSettings biome;
     };
 
     // Calls visit(field) for every setting in a fixed order (hashing, saving, loading).
@@ -200,6 +212,13 @@ namespace olam
         visit(soil.sandyMaxAridity);
         visit(soil.textureNoise);
         visit(soil.textureNoiseWavelengthKm);
+
+        auto &biome = settings.biome;
+        visit(biome.alpineMinElevationM);
+        visit(biome.alpineMaxC);
+        visit(biome.wetlandMaxSlope);
+        visit(biome.wetlandMinAridity);
+        visit(biome.wetlandFloodplain);
     }
 
     std::optional<std::string> validateGenerationSettings(const WorldGenSettings &settings);

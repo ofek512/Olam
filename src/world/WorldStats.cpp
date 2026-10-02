@@ -97,6 +97,39 @@ namespace olam
             const double tileKm2 = config.tileSizeMeters * config.tileSizeMeters / 1.0e6;
             lines.push_back(std::format("Lakes {}   largest {:.0f} km2", hydrology.lakes.size(), largestLake * tileKm2));
         }
+
+        const auto &biome = world.geography().biome;
+        if (!biome.empty())
+        {
+            std::size_t counts[static_cast<std::size_t>(Biome::Count)] = {};
+            std::size_t land = 0;
+            for (const Biome value : biome.values())
+            {
+                ++counts[static_cast<std::size_t>(value)];
+                land += value != Biome::None ? 1u : 0u;
+            }
+            // The four most common land biomes (ties: enum order).
+            std::string line = "Biomes";
+            for (int rank = 0; rank < 4; ++rank)
+            {
+                std::size_t best = 0;
+                std::size_t bestCount = 0;
+                for (std::size_t b = 1; b < static_cast<std::size_t>(Biome::Count); ++b)
+                {
+                    if (counts[b] > bestCount)
+                    {
+                        best = b;
+                        bestCount = counts[b];
+                    }
+                }
+                if (bestCount == 0)
+                    break;
+                line += std::format("   {} {:.0f} %", toString(static_cast<Biome>(best)),
+                                    100.0 * static_cast<double>(bestCount) / static_cast<double>(std::max<std::size_t>(land, 1)));
+                counts[best] = 0;
+            }
+            lines.push_back(line);
+        }
         return lines;
     }
 

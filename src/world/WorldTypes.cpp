@@ -99,4 +99,44 @@ namespace olam
         return "?";
     }
 
+    std::string_view toString(Biome biome)
+    {
+        switch (biome)
+        {
+        case Biome::None:
+            return "None";
+        case Biome::Ice:
+            return "Ice";
+        case Biome::Tundra:
+            return "Tundra";
+        case Biome::BorealForest:
+            return "Boreal forest";
+        case Biome::TemperateRainforest:
+            return "Temperate rainforest";
+        case Biome::TemperateForest:
+            return "Temperate forest";
+        case Biome::TemperateGrassland:
+            return "Temperate grassland";
+        case Biome::Shrubland:
+            return "Shrubland";
+        case Biome::ColdDesert:
+            return "Cold desert";
+        case Biome::HotDesert:
+            return "Hot desert";
+        case Biome::Savanna:
+            return "Savanna";
+        case Biome::TropicalDryForest:
+            return "Tropical dry forest";
+        case Biome::TropicalRainforest:
+            return "Tropical rainforest";
+        case Biome::Alpine:
+            return "Alpine";
+        case Biome::Wetland:
+            return "Wetland";
+        case Biome::Count:
+            break;
+        }
+        return "?";
+    }
+
 } // namespace olam

@@ -172,7 +172,9 @@ other intermediate layers.
   (strong floodplain) -> peat (wet, flat, cool) -> laterite (hot and humid) -> sandy (arid) -> texture
   (sedimentary / wet -> clay, igneous / dry -> sand, plus regional noise) -> loam.
 - Biome from a Whittaker-style temperature × moisture table (14 biomes); alpine by temperature/tree line,
-  wetland on flat, very wet land near rivers and lakes. Water is not a biome.
+  wetland on flat, very wet land near rivers and lakes (or on peat). Water is not a biome. The climate table
+  (`climateBiome`) uses mean annual °C and the aridity index: ice ≤ −10 °C, tundra < −5 °C, deserts AI < 0.2,
+  then cold / temperate / subtropical / tropical bands split by AI into grassland, shrubland, savanna and forests.
 - Fertility = product of climate, terrain, water access and soil factors, with a floodplain bonus scaled by
   river discharge.
 - Vegetation category + tree cover from biome, moisture, fertility, slope and small noise.

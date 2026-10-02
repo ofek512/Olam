@@ -242,6 +242,24 @@ namespace olam
             {190, 70, 35},   // Laterite
         }};
 
+        constexpr std::array<Rgb, static_cast<std::size_t>(Biome::Count)> kBiomeColors = {{
+            {30, 45, 80},    // None (water)
+            {240, 245, 250}, // Ice
+            {165, 175, 150}, // Tundra
+            {45, 95, 70},    // Boreal forest
+            {20, 100, 60},   // Temperate rainforest
+            {60, 130, 50},   // Temperate forest
+            {170, 190, 95},  // Temperate grassland
+            {175, 160, 90},  // Shrubland
+            {195, 185, 150}, // Cold desert
+            {230, 205, 135}, // Hot desert
+            {200, 180, 80},  // Savanna
+            {120, 150, 50},  // Tropical dry forest
+            {20, 120, 30},   // Tropical rainforest
+            {150, 140, 135}, // Alpine
+            {70, 130, 120},  // Wetland
+        }};
+
         // One colour per enum value; land is optionally hillshaded, water uses the colour of value 0.
         template <typename Enum, std::size_t N>
         void colorizeCategories(const World &world, const Layer<Enum> &layer, const std::array<Rgb, N> &colors,
@@ -330,6 +348,8 @@ namespace olam
             return !world.hydrology().discharge.empty();
         case WorldView::Soil:
             return !world.geography().soil.empty();
+        case WorldView::Biome:
+            return !world.geography().biome.empty();
         case WorldView::HashDebug:
             return true;
         default:
@@ -404,6 +424,9 @@ namespace olam
             break;
         case WorldView::Soil:
             colorizeCategories(world, world.geography().soil, kSoilColors, options, rgba);
+            break;
+        case WorldView::Biome:
+            colorizeCategories(world, world.geography().biome, kBiomeColors, options, rgba);
             break;
         case WorldView::HashDebug:
         default:

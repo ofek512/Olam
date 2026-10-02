@@ -107,6 +107,7 @@ add_library(olam_worldgen STATIC
     src/worldgen/passes/RainfallPass.cpp
     src/worldgen/passes/HydrologyPass.cpp
     src/worldgen/passes/SoilPass.cpp
+    src/worldgen/passes/BiomePass.cpp
 )
 target_link_libraries(olam_worldgen
     PUBLIC olam_world

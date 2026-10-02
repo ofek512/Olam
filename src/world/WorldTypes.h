@@ -74,4 +74,27 @@ namespace olam
 
     std::string_view toString(SoilType soil);
 
+    // Water is not a biome (None).
+    enum class Biome : std::uint8_t
+    {
+        None,
+        Ice,
+        Tundra,
+        BorealForest,
+        TemperateRainforest,
+        TemperateForest,
+        TemperateGrassland,
+        Shrubland,
+        ColdDesert,
+        HotDesert,
+        Savanna,
+        TropicalDryForest,
+        TropicalRainforest,
+        Alpine,
+        Wetland,
+        Count,
+    };
+
+    std::string_view toString(Biome biome);
+
 } // namespace olam

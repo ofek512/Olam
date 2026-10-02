@@ -25,6 +25,7 @@ namespace olam
             {LayerId::RiverId, "River", ""},
             {LayerId::LakeId, "Lake", ""},
             {LayerId::Soil, "Soil", ""},
+            {LayerId::Biome, "Biome", ""},
         };
 
         constexpr std::string_view kDirectionNames[] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
@@ -99,6 +100,8 @@ namespace olam
         }
         case LayerId::Soil:
             return std::string(toString(world.geography().soil[index]));
+        case LayerId::Biome:
+            return std::string(toString(world.geography().biome[index]));
         case LayerId::Count:
             break;
         }

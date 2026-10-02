@@ -86,6 +86,10 @@ namespace olam
               soil.peatMaxSlope >= 0.0f && soil.lateriteMinAridity >= 0.0f && soil.sandyMaxAridity >= 0.0f &&
               soil.textureNoise >= 0.0f && soil.textureNoiseWavelengthKm > 0.0f))
             return "soil settings out of range";
+        const auto &biome = settings.biome;
+        if (!(biome.alpineMinElevationM >= 0.0f && biome.wetlandMaxSlope >= 0.0f && biome.wetlandMinAridity >= 0.0f &&
+              biome.wetlandFloodplain > 0.0f && biome.wetlandFloodplain <= 1.0f))
+            return "biome settings out of range";
         return std::nullopt;
     }
 

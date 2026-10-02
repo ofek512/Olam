@@ -27,6 +27,7 @@ namespace olam
         RiverId,
         LakeId,
         Soil,
+        Biome,
         Count,
     };
 
@@ -84,6 +85,9 @@ namespace olam
             break;
         case LayerId::Soil:
             f(world.geography().soil);
+            break;
+        case LayerId::Biome:
+            f(world.geography().biome);
             break;
         case LayerId::Count:
             break;
