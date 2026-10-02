@@ -86,6 +86,8 @@ namespace olam
     {
         Layer<SoilType> soil;
         Layer<Biome> biome;
+        // Natural fertility 0..255 (product of climate, terrain, water and soil factors).
+        Layer<std::uint8_t> fertility;
     };
 
 } // namespace olam

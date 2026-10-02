@@ -130,6 +130,26 @@ namespace olam
             }
             lines.push_back(line);
         }
+
+        const auto &fertility = world.geography().fertility;
+        if (!fertility.empty())
+        {
+            std::uint64_t sum = 0;
+            std::size_t land = 0;
+            std::size_t prime = 0;
+            for (std::size_t i = 0; i < fertility.size(); ++i)
+            {
+                if (world.hydrology().surfaceWater[i] != SurfaceWater::Land)
+                    continue;
+                ++land;
+                sum += fertility[i];
+                prime += fertility[i] >= 179 ? 1u : 0u;
+            }
+            const double landCount = static_cast<double>(std::max<std::size_t>(land, 1));
+            lines.push_back(std::format("Fertility mean {:.0f} %   prime land (>= 70 %) {:.1f} %",
+                                        static_cast<double>(sum) / landCount / 2.55,
+                                        100.0 * static_cast<double>(prime) / landCount));
+        }
         return lines;
     }
 

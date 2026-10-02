@@ -176,7 +176,8 @@ other intermediate layers.
   (`climateBiome`) uses mean annual °C and the aridity index: ice ≤ −10 °C, tundra < −5 °C, deserts AI < 0.2,
   then cold / temperate / subtropical / tropical bands split by AI into grassland, shrubland, savanna and forests.
 - Fertility = product of climate, terrain, water access and soil factors, with a floodplain bonus scaled by
-  river discharge.
+  river discharge. Floodplains count as irrigated (moisture factor ≥ 0.95 × floodplain strength), so rivers make
+  green valleys through dry interiors. Grain / livestock / orchard suitability: `world/queries/AgricultureQueries`.
 - Vegetation category + tree cover from biome, moisture, fertility, slope and small noise.
 
 ### Resources

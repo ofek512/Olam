@@ -3,6 +3,7 @@
 #include "tools/world_viewer/DebugHashView.h"
 #include "world/World.h"
 #include "world/WorldLayers.h"
+#include "world/queries/AgricultureQueries.h"
 #include "world/queries/TerrainQueries.h"
 
 #include <cmath>
@@ -43,6 +44,13 @@ namespace olam
         {
             lines.push_back(std::format("Slope: {:.1f} %  ({})", slopeAt(world, coord) * 100.0f,
                                         toString(terrainClassAt(world, coord))));
+        }
+
+        if (!world.geography().fertility.empty() && world.hydrology().surfaceWater[tile.index()] == SurfaceWater::Land)
+        {
+            const AgricultureSuitability farming = agricultureAt(world, coord);
+            lines.push_back(std::format("Farming: grain {:.0f}  livestock {:.0f}  orchard {:.0f} %", farming.grain * 100.0f,
+                                        farming.livestock * 100.0f, farming.orchard * 100.0f));
         }
 
         if (options.showDebugHash)

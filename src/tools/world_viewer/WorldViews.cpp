@@ -230,6 +230,14 @@ namespace olam
             {255.0f, {30, 90, 150}},
         }};
 
+        constexpr std::array<ColorStop, 5> kFertilityRamp = {{
+            {0.0f, {120, 110, 100}},
+            {50.0f, {190, 160, 110}},
+            {120.0f, {220, 210, 100}},
+            {190.0f, {110, 175, 60}},
+            {255.0f, {30, 110, 30}},
+        }};
+
         constexpr std::array<Rgb, static_cast<std::size_t>(SoilType::Count)> kSoilColors = {{
             {30, 45, 80},    // None (water)
             {125, 120, 115}, // Rocky
@@ -350,6 +358,8 @@ namespace olam
             return !world.geography().soil.empty();
         case WorldView::Biome:
             return !world.geography().biome.empty();
+        case WorldView::Fertility:
+            return !world.geography().fertility.empty();
         case WorldView::HashDebug:
             return true;
         default:
@@ -428,6 +438,13 @@ namespace olam
         case WorldView::Biome:
             colorizeCategories(world, world.geography().biome, kBiomeColors, options, rgba);
             break;
+        case WorldView::Fertility:
+        {
+            const auto &fertility = world.geography().fertility;
+            colorizeRamp(world, kFertilityRamp, [&](std::size_t i)
+                         { return static_cast<float>(fertility[i]); }, rgba);
+            break;
+        }
         case WorldView::HashDebug:
         default:
             colorizeHashDebug(world, rgba);

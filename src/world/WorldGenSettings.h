@@ -126,6 +126,14 @@ namespace olam
         float wetlandFloodplain = 0.8f;
     };
 
+    struct FertilitySettings
+    {
+        // Multiplier 1 + bonus * floodplain strength (silt deposition).
+        float floodplainBonus = 0.25f;
+        // Floodplains are watered by their river: moisture factor >= irrigation * floodplain strength.
+        float riverIrrigation = 0.95f;
+    };
+
     // Tuning values for every generation pass. Part of WorldConfig, so they are validated, hashed and saved.
     // Each pass adds its own group when it is implemented.
     struct WorldGenSettings
@@ -138,6 +146,7 @@ namespace olam
         HydrologySettings hydrology;
         SoilSettings soil;
         BiomeSettings biome;
+        FertilitySettings fertility;
     };
 
     // Calls visit(field) for every setting in a fixed order (hashing, saving, loading).
@@ -219,6 +228,10 @@ namespace olam
         visit(biome.wetlandMaxSlope);
         visit(biome.wetlandMinAridity);
         visit(biome.wetlandFloodplain);
+
+        auto &fertility = settings.fertility;
+        visit(fertility.floodplainBonus);
+        visit(fertility.riverIrrigation);
     }
 
     std::optional<std::string> validateGenerationSettings(const WorldGenSettings &settings);

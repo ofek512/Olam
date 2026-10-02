@@ -1,6 +1,7 @@
 #include "TestFramework.h"
 #include "worldgen/WorldGenTestUtil.h"
 
+#include "worldgen/passes/FertilityPass.h"
 #include "worldgen/passes/HydrologyPass.h"
 
 #include <algorithm>
@@ -171,4 +172,43 @@ OLAM_TEST(soil_invariants)
     }
     OLAM_CHECK(riverTiles > 0 && alluvialRiverTiles * 2 > riverTiles);
     OLAM_CHECK(counts[static_cast<std::size_t>(SoilType::Loam)] > 0);
+}
+
+OLAM_TEST(fertility_invariants)
+{
+    const auto world = test::generateWorld(42, test::smallWorldConfig(512, 256));
+    OLAM_CHECK(world != nullptr);
+    if (!world)
+        return;
+    const auto &fertility = world->geography().fertility;
+    const auto &soil = world->geography().soil;
+    double alluvialSum = 0.0;
+    double rockySum = 0.0;
+    std::size_t alluvial = 0;
+    std::size_t rocky = 0;
+    for (std::size_t i = 0; i < world->tileCount(); ++i)
+    {
+        if (world->hydrology().surfaceWater[i] != SurfaceWater::Land)
+        {
+            OLAM_CHECK(fertility[i] == 0);
+            continue;
+        }
+        if (soil[i] == SoilType::Alluvial)
+        {
+            alluvialSum += fertility[i];
+            ++alluvial;
+        }
+        else if (soil[i] == SoilType::Rocky)
+        {
+            rockySum += fertility[i];
+            ++rocky;
+        }
+    }
+    OLAM_CHECK(alluvial > 0 && rocky > 0);
+    if (alluvial > 0 && rocky > 0)
+        OLAM_CHECK(alluvialSum / static_cast<double>(alluvial) > 2.0 * rockySum / static_cast<double>(rocky));
+
+    OLAM_CHECK(fertility::soilFactor(SoilType::Loam) > fertility::soilFactor(SoilType::Sandy));
+    OLAM_CHECK(fertility::moistureFactor(0.0f) == 0.0f && fertility::moistureFactor(1.0f) == 1.0f);
+    OLAM_CHECK(fertility::temperatureFactor(-10.0f) == 0.0f);
 }

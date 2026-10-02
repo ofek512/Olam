@@ -90,6 +90,9 @@ namespace olam
         if (!(biome.alpineMinElevationM >= 0.0f && biome.wetlandMaxSlope >= 0.0f && biome.wetlandMinAridity >= 0.0f &&
               biome.wetlandFloodplain > 0.0f && biome.wetlandFloodplain <= 1.0f))
             return "biome settings out of range";
+        const auto &fertility = settings.fertility;
+        if (!(fertility.floodplainBonus >= 0.0f && fertility.riverIrrigation >= 0.0f && fertility.riverIrrigation <= 1.0f))
+            return "fertility settings out of range";
         return std::nullopt;
     }
 
