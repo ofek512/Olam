@@ -1,4 +1,4 @@
-#include "core/application/Application.h"
+#include "app/Application.h"
 
 #include <SDL3/SDL_main.h>
 

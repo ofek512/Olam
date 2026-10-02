@@ -1,4 +1,4 @@
-#include "core/application/Application.h"
+#include "app/Application.h"
 
 #include "core/logging/Log.h"
 #include "render/debug_render/DebugOverlay.h"

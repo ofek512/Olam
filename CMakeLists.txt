@@ -6,28 +6,31 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(OLAM_BUILD_ENGINE "Build SDL-dependent targets (engine, viewer, executable)" ON)
 option(OLAM_BUILD_TESTS "Build Olam unit tests" ON)
 
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
-include(FetchContent)
+if(OLAM_BUILD_ENGINE)
+    include(FetchContent)
 
-set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-set(SDL_STATIC ON CACHE BOOL "" FORCE)
-set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
-set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
 
-FetchContent_Declare(
-    SDL3
-    GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-    GIT_TAG        release-3.4.16
-    GIT_SHALLOW    TRUE
-)
-FetchContent_MakeAvailable(SDL3)
+    FetchContent_Declare(
+        SDL3
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG        release-3.4.16
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(SDL3)
+endif()
 
 # ---------------------------------------------------------------------------
-# Warnings
+# Compiler settings
 # ---------------------------------------------------------------------------
 add_library(olam_warnings INTERFACE)
 if(MSVC)
@@ -36,8 +39,19 @@ else()
     target_compile_options(olam_warnings INTERFACE -Wall -Wextra -Wpedantic)
 endif()
 
+# Bit-reproducible floating point for deterministic world generation.
+add_library(olam_determinism INTERFACE)
+if(MSVC)
+    target_compile_options(olam_determinism INTERFACE /fp:precise)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        target_compile_options(olam_determinism INTERFACE /clang:-ffp-contract=off)
+    endif()
+else()
+    target_compile_options(olam_determinism INTERFACE -ffp-contract=off -fno-fast-math)
+endif()
+
 # ---------------------------------------------------------------------------
-# olam_core: pure C++ (no SDL), unit-testable.
+# olam_core: generic infrastructure, no SDL, no world knowledge.
 # ---------------------------------------------------------------------------
 add_library(olam_core STATIC
     src/core/logging/Log.cpp
@@ -48,29 +62,33 @@ add_library(olam_core STATIC
     src/render/camera/Camera2D.cpp
 )
 target_include_directories(olam_core PUBLIC src)
-target_link_libraries(olam_core PRIVATE olam_warnings)
-
-# ---------------------------------------------------------------------------
-# olam_engine: platform (SDL3), rendering and the application loop.
-# ---------------------------------------------------------------------------
-add_library(olam_engine STATIC
-    src/platform/sdl/SdlPlatform.cpp
-    src/render/renderer/Renderer.cpp
-    src/render/debug_render/DebugOverlay.cpp
-    src/render/debug_render/TestPattern.cpp
-    src/core/application/Application.cpp
-)
-target_link_libraries(olam_engine
-    PUBLIC olam_core SDL3::SDL3-static
+target_link_libraries(olam_core
+    PUBLIC olam_determinism
     PRIVATE olam_warnings
 )
 
 # ---------------------------------------------------------------------------
-# Executable
+# SDL-dependent targets
 # ---------------------------------------------------------------------------
-add_executable(Olam src/main.cpp)
-target_link_libraries(Olam PRIVATE olam_engine olam_warnings)
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Olam)
+if(OLAM_BUILD_ENGINE)
+    add_library(olam_engine STATIC
+        src/platform/sdl/SdlPlatform.cpp
+        src/render/renderer/Renderer.cpp
+        src/render/debug_render/DebugOverlay.cpp
+        src/render/debug_render/TestPattern.cpp
+    )
+    target_link_libraries(olam_engine
+        PUBLIC olam_core SDL3::SDL3-static
+        PRIVATE olam_warnings
+    )
+
+    add_executable(Olam
+        src/app/main.cpp
+        src/app/Application.cpp
+    )
+    target_link_libraries(Olam PRIVATE olam_engine olam_warnings)
+    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Olam)
+endif()
 
 if(OLAM_BUILD_TESTS)
     enable_testing()
