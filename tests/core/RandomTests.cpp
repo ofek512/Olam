@@ -16,8 +16,11 @@ OLAM_TEST(splitmix64_reference_sequence)
 {
     SplitMix64 rng(1234567);
     const std::array<std::uint64_t, 5> expected = {
-        6457827717110365317ULL, 3203168211198807973ULL, 9817491932198370423ULL,
-        4593380528125082431ULL, 16408922859458223821ULL,
+        6457827717110365317ULL,
+        3203168211198807973ULL,
+        9817491932198370423ULL,
+        4593380528125082431ULL,
+        16408922859458223821ULL,
     };
     for (const std::uint64_t value : expected)
         OLAM_CHECK(rng.next() == value);
@@ -28,7 +31,12 @@ OLAM_TEST(pcg32_reference_sequence)
 {
     Pcg32 rng(42, 54);
     const std::array<std::uint32_t, 6> expected = {
-        0xa15c02b7u, 0x7b47f409u, 0xba1d3330u, 0x83d2f293u, 0xbfa4784bu, 0xcbed606eu,
+        0xa15c02b7u,
+        0x7b47f409u,
+        0xba1d3330u,
+        0x83d2f293u,
+        0xbfa4784bu,
+        0xcbed606eu,
     };
     for (const std::uint32_t value : expected)
         OLAM_CHECK(rng.nextU32() == value);

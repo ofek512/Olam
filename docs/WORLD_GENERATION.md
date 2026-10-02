@@ -18,16 +18,16 @@ over independent random layers. No plate tectonics, ocean currents, long erosion
   `parallel_for`. `std::execution::par` is not used (needs TBB on GCC, incomplete in libc++).
 - Each pass adds its persistent layer(s) when it is implemented; no placeholder layers.
 
-| Pass | Produces |
-|---|---|
-| ElevationPass | `elevation` |
-| OceanPass | `surfaceWater` |
-| TemperaturePass | `meanAnnualTemperature` |
-| RainfallPass | `annualRainfall`, `moisture` |
-| HydrologyPass | `flowDirection`, `flowAccumulation`, rivers, lakes |
-| BiomePass | `biome` |
-| FertilityPass | `fertility` |
-| RegionPass | `region` |
+| Pass            | Produces                                           |
+| --------------- | -------------------------------------------------- |
+| ElevationPass   | `elevation`                                        |
+| OceanPass       | `surfaceWater`                                     |
+| TemperaturePass | `meanAnnualTemperature`                            |
+| RainfallPass    | `annualRainfall`, `moisture`                       |
+| HydrologyPass   | `flowDirection`, `flowAccumulation`, rivers, lakes |
+| BiomePass       | `biome`                                            |
+| FertilityPass   | `fertility`                                        |
+| RegionPass      | `region`                                           |
 
 ## Determinism
 
@@ -45,7 +45,7 @@ across MSVC, GCC and Clang**; cross-platform hash equality will be enforced in C
 - **Hashing**: own xxHash64. World hash = per-layer hashes (little-endian element bytes, independent of padding)
   combined with config and seed.
 - **Seeds**: `uint64_t`. Text seeds: a valid decimal `uint64` is used as-is; anything else is xxHash64 of its
-  UTF-8 bytes. Non-deterministic sources (`std::random_device`) may only *pick* a seed, in the app layer.
+  UTF-8 bytes. Non-deterministic sources (`std::random_device`) may only _pick_ a seed, in the app layer.
 
 ### Float-math policy
 
@@ -59,17 +59,17 @@ across MSVC, GCC and Clang**; cross-platform hash equality will be enforced in C
 
 ## Units and storage
 
-| Field | Generation | Persistent |
-|---|---|---|
-| Elevation (ground / lake bed) | normalised float | `int16_t` metres, sea level = 0 m (~-4500..+4500) |
-| Mean annual temperature | float | `int16_t` tenths of °C (183 = 18.3 °C) |
-| Annual rainfall | float | `uint16_t` mm/year |
-| Moisture (derived, not rainfall) | float | `uint8_t` 0-255 |
-| Fertility | float | `uint8_t` 0-255 |
-| Biome | — | `uint8_t` id |
-| Flow direction (D8) | — | `uint8_t` |
-| Flow accumulation | — | `uint32_t` |
-| Region | — | `RegionId` (`uint32_t`) |
+| Field                            | Generation       | Persistent                                        |
+| -------------------------------- | ---------------- | ------------------------------------------------- |
+| Elevation (ground / lake bed)    | normalised float | `int16_t` metres, sea level = 0 m (~-4500..+4500) |
+| Mean annual temperature          | float            | `int16_t` tenths of °C (183 = 18.3 °C)            |
+| Annual rainfall                  | float            | `uint16_t` mm/year                                |
+| Moisture (derived, not rainfall) | float            | `uint8_t` 0-255                                   |
+| Fertility                        | float            | `uint8_t` 0-255                                   |
+| Biome                            | —                | `uint8_t` id                                      |
+| Flow direction (D8)              | —                | `uint8_t`                                         |
+| Flow accumulation                | —                | `uint32_t`                                        |
+| Region                           | —                | `RegionId` (`uint32_t`)                           |
 
 Terrain height is continuous. Categories (plains, hills, mountains) are **derived** from elevation, slope and
 relative relief, never stored as the height model.

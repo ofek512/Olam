@@ -46,7 +46,7 @@ Tests: one executable per library (`olam_core_tests`, `olam_world_tests`, `olam_
 - Represents a "known world" region of a larger planet: several landmasses, seas and islands.
 - **Size**: default 2048 x 2048, max 4096 per side, min 16, each side a power of two; non-square allowed.
 - **Scale**: ~1 km x 1 km per world tile (`WorldConfig::tileSizeMeters`, configurable; never hard-coded into simulation).
-  World tiles are geographic areas: rivers and roads pass *through* a tile.
+  World tiles are geographic areas: rivers and roads pass _through_ a tile.
 - **Coordinates**: origin at the north-west (top-left), +x = east, +y = south, `int32`.
   Tile `(x, y)` covers `[x, x+1) x [y, y+1)` in world units; its centre is `(x + 0.5, y + 0.5)`.
 - **Hierarchy**: world tiles -> irregular regions -> region graph (trade, kingdoms, armies).

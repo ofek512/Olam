@@ -52,7 +52,8 @@ namespace olam
 
     void WorldGenContext::releaseWorkingLayer(std::string_view name)
     {
-        std::erase_if(m_workingLayers, [name](const auto &entry) { return entry->name == name; });
+        std::erase_if(m_workingLayers, [name](const auto &entry)
+                      { return entry->name == name; });
     }
 
 } // namespace olam

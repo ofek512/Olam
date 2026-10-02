@@ -9,16 +9,16 @@ namespace olam::detail
 
 // Programmer-error checks; compiled out in release builds (NDEBUG).
 #ifdef NDEBUG
-#define OLAM_ASSERT(condition) \
-    do                         \
-    {                          \
+#define OLAM_ASSERT(condition)   \
+    do                           \
+    {                            \
         (void)sizeof(condition); \
     } while (false)
 #else
-#define OLAM_ASSERT(condition)                                                \
-    do                                                                        \
-    {                                                                         \
-        if (!(condition))                                                     \
+#define OLAM_ASSERT(condition)                                               \
+    do                                                                       \
+    {                                                                        \
+        if (!(condition))                                                    \
             ::olam::detail::assertionFailed(#condition, __FILE__, __LINE__); \
     } while (false)
 #endif
