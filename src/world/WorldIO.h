@@ -17,7 +17,7 @@ namespace olam
 
     // .olamworld: "OLAMWRLD", version, config, seed, present layers (LayerId, size, values), hydrology and
     // resource entities, then the world hash, verified on load. Little-endian, uncompressed.
-    inline constexpr std::uint32_t kWorldFileVersion = 3;
+    inline constexpr std::uint32_t kWorldFileVersion = 4;
 
     std::vector<std::uint8_t> serializeWorld(const World &world);
 

@@ -83,6 +83,8 @@ namespace olam
             return "none";
         case RiverClass::Stream:
             return "stream";
+        case RiverClass::MinorRiver:
+            return "minor river";
         case RiverClass::River:
             return "river";
         case RiverClass::Major:

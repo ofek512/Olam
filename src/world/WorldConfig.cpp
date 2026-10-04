@@ -85,7 +85,9 @@ namespace olam
         const auto &hydro = settings.hydrology;
         if (!(hydro.minLakeTiles >= 1 && hydro.minLakeDepthM >= 1 && hydro.routingNoiseM >= 0.0f &&
               hydro.routingNoiseWavelengthKm > 0.0f && hydro.streamDischarge > 0.0f &&
-              hydro.riverDischarge >= hydro.streamDischarge && hydro.majorRiverDischarge >= hydro.riverDischarge &&
+              hydro.minorRiverDischarge >= hydro.streamDischarge && hydro.riverDischarge >= hydro.minorRiverDischarge &&
+              hydro.majorRiverDischarge >= hydro.riverDischarge && hydro.navigableDischarge > 0.0f &&
+              hydro.navigableMaxGradientMPerKm > 0.0f &&
               hydro.majorRiverDischarge < 1.0e7f && hydro.floodplainBaseKm >= 0.0f &&
               hydro.floodplainKmPerSqrtDischarge >= 0.0f && hydro.floodplainMaxRiseM > 0.0f && hydro.minWatershedKm2 >= 0.0f))
             return "hydrology settings out of range";

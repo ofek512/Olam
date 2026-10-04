@@ -89,7 +89,8 @@ namespace olam
                         return std::format("invalid path of river {}", r + 1);
                 }
                 std::uint32_t tributaryCount = 0;
-                if (!reader.read(river.mouthDischarge) || !reader.read(river.endsIn) || river.endsIn >= RiverEnd::Count ||
+                if (!reader.read(river.mouthDischarge) || !reader.read(river.order) || river.order == 0 ||
+                    !reader.read(river.endsIn) || river.endsIn >= RiverEnd::Count ||
                     !reader.read(river.flowsInto) || !reader.read(river.lake) || !readCount(reader, 4, tributaryCount))
                     return std::format("invalid river {}", r + 1);
                 river.tributaries.resize(tributaryCount);
@@ -207,6 +208,7 @@ namespace olam
             for (const WorldCoord tile : river.path)
                 writeCoord(writer, tile);
             writer.write(river.mouthDischarge);
+            writer.write(river.order);
             writer.write(river.endsIn);
             writer.write(river.flowsInto);
             writer.write(river.lake);

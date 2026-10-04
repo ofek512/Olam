@@ -86,7 +86,8 @@ namespace olam
         }
 
         constexpr Rgb kLakeColor{60, 120, 190};
-        constexpr std::array<Rgb, 4> kRiverColors = {{{0, 0, 0}, {90, 150, 215}, {50, 110, 205}, {25, 70, 180}}};
+        constexpr std::array<Rgb, 5> kRiverColors = {
+            {{0, 0, 0}, {90, 150, 215}, {70, 130, 210}, {50, 110, 205}, {25, 70, 180}}};
 
         bool riverColor(const World &world, std::size_t index, Rgb &color)
         {
@@ -545,6 +546,10 @@ namespace olam
                         const float discharge = static_cast<float>(hydrology.discharge[i]) / 100.0f;
                         const float t = std::clamp(std::log10(std::max(discharge / stream, 1e-6f)) * 0.5f + 1.0f, 0.0f, 1.0f);
                         color = mix(color, kRiverColors[1], 0.6f * t);
+                    }
+                    else if (isNavigable(world, i))
+                    {
+                        color = {20, 150, 165};
                     }
                     writePixel(rgba, i, color);
                 }

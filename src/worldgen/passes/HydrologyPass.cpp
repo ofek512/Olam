@@ -370,6 +370,56 @@ namespace olam
         }
         for (Lake &lake : hydrology.lakes)
             lake.outflow = hydrology.riverId[world.index(lake.outlet)];
+
+        // Strahler order over river tiles, upstream first. A lake passes on the highest order flowing into it as a
+        // single branch, so its many tiles do not count as confluences.
+        {
+            std::vector<std::uint8_t> order(tileCount, 0);
+            std::vector<std::uint8_t> inMax(tileCount, 0);
+            std::vector<std::uint8_t> inMaxCount(tileCount, 0);
+            std::vector<std::uint8_t> fromLake(tileCount, 0);
+            const auto addBranch = [&](std::size_t tile, std::uint8_t branch)
+            {
+                if (branch > inMax[tile])
+                {
+                    inMax[tile] = branch;
+                    inMaxCount[tile] = 1;
+                }
+                else if (branch == inMax[tile] && inMaxCount[tile] < 255)
+                {
+                    ++inMaxCount[tile];
+                }
+            };
+            for (auto it = floodOrder.rbegin(); it != floodOrder.rend(); ++it)
+            {
+                const std::uint32_t tile = *it;
+                const bool lake = water[tile] == SurfaceWater::Lake;
+                if (!lake && !isRiverTile(tile))
+                    continue;
+                if (lake)
+                {
+                    order[tile] = std::max(inMax[tile], fromLake[tile]);
+                }
+                else
+                {
+                    if (fromLake[tile] > 0)
+                        addBranch(tile, fromLake[tile]);
+                    if (inMax[tile] == 0)
+                        order[tile] = 1;
+                    else
+                        order[tile] = inMaxCount[tile] >= 2 && inMax[tile] < 255 ? inMax[tile] + 1 : inMax[tile];
+                }
+                const std::size_t next = downstream(tile);
+                if (next == kNone || order[tile] == 0)
+                    continue;
+                if (lake || water[next] == SurfaceWater::Lake)
+                    fromLake[next] = std::max(fromLake[next], order[tile]);
+                else
+                    addBranch(next, order[tile]);
+            }
+            for (River &river : stems)
+                river.order = order[world.index(river.mouth())];
+        }
         hydrology.rivers = std::move(stems);
 
         // 5. Floodplain strength (0..1) around rivers for soil and fertility; wider along larger rivers.

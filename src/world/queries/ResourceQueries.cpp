@@ -43,6 +43,8 @@ namespace olam
             {
             case RiverClass::Stream:
                 return 0.3f;
+            case RiverClass::MinorRiver:
+                return 0.45f;
             case RiverClass::River:
                 return 0.6f;
             case RiverClass::Major:

@@ -101,8 +101,12 @@ namespace olam
         // Discharge (m^3/s) for a tile to carry a stream / river / major river. Catchments on a 2048 km map are
         // regional, so the classes are scaled down from Earth's continental rivers.
         float streamDischarge = 10.0f;
-        float riverDischarge = 50.0f;
-        float majorRiverDischarge = 300.0f;
+        float minorRiverDischarge = 30.0f;
+        float riverDischarge = 80.0f;
+        float majorRiverDischarge = 250.0f;
+        // Boats can use a river from this discharge on where it falls at most this much per km; lakes are navigable.
+        float navigableDischarge = 60.0f;
+        float navigableMaxGradientMPerKm = 1.5f;
         // Floodplain half-width = base + perSqrtDischarge * sqrt(discharge); fades out over maxRiseM above the river.
         float floodplainBaseKm = 3.0f;
         float floodplainKmPerSqrtDischarge = 0.5f;
@@ -256,8 +260,11 @@ namespace olam
         visit(hydro.routingNoiseM);
         visit(hydro.routingNoiseWavelengthKm);
         visit(hydro.streamDischarge);
+        visit(hydro.minorRiverDischarge);
         visit(hydro.riverDischarge);
         visit(hydro.majorRiverDischarge);
+        visit(hydro.navigableDischarge);
+        visit(hydro.navigableMaxGradientMPerKm);
         visit(hydro.floodplainBaseKm);
         visit(hydro.floodplainKmPerSqrtDischarge);
         visit(hydro.floodplainMaxRiseM);

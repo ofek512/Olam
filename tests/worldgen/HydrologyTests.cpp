@@ -1,6 +1,7 @@
 #include "TestFramework.h"
 #include "worldgen/WorldGenTestUtil.h"
 
+#include "world/queries/HydrologyQueries.h"
 #include "worldgen/passes/FertilityPass.h"
 #include "worldgen/passes/HydrologyPass.h"
 
@@ -198,6 +199,59 @@ OLAM_TEST(watershed_invariants)
         for (const LakeId lake : basin.lakes)
             OLAM_CHECK(watershed[world->index(hydrology.lakes[lake.index()].outlet)] == basin.id);
     }
+}
+
+OLAM_TEST(river_order_and_navigability)
+{
+    const auto world = test::generateWorld(42, test::smallWorldConfig(512, 512));
+    OLAM_CHECK(world != nullptr);
+    if (!world)
+        return;
+    const HydrologyData &hydrology = world->hydrology();
+    std::vector<std::uint8_t> lakeFed(hydrology.rivers.size(), 0);
+    for (const Lake &lake : hydrology.lakes)
+    {
+        if (lake.outflow.isValid())
+            lakeFed[lake.outflow.index()] = 1;
+    }
+    std::uint8_t highest = 0;
+    for (const River &river : hydrology.rivers)
+    {
+        OLAM_CHECK(river.order >= 1);
+        highest = std::max(highest, river.order);
+        // A confluence never lowers the order; unbranched headwater stems are order 1.
+        for (const RiverId tributary : river.tributaries)
+            OLAM_CHECK(river.order >= hydrology.rivers[tributary.index()].order);
+        if (river.tributaries.empty() && !lakeFed[river.id.index()] && river.order != 1)
+        {
+            // Only possible when a lake drains into the river somewhere along its path.
+            bool lakeInflow = false;
+            for (const WorldCoord tile : river.path)
+            {
+                for (std::size_t d = 0; d < kDirection8Count; ++d)
+                {
+                    const WorldCoord n = neighbor(tile, static_cast<Direction8>(d));
+                    if (world->isValid(n) && hydrology.surfaceWater[world->index(n)] == SurfaceWater::Lake &&
+                        downstreamOf(*world, world->index(n)) == world->index(tile))
+                        lakeInflow = true;
+                }
+            }
+            OLAM_CHECK(lakeInflow);
+        }
+    }
+    OLAM_CHECK(highest >= 2);
+
+    const float navigableDischarge = world->config().generation.hydrology.navigableDischarge;
+    std::size_t navigable = 0;
+    for (std::size_t i = 0; i < world->tileCount(); ++i)
+    {
+        if (!hydrology.riverId[i].isValid() || !isNavigable(*world, i))
+            continue;
+        ++navigable;
+        OLAM_CHECK(hydrology.discharge[i] / 100.0f >= navigableDischarge - 0.01f);
+    }
+    OLAM_CHECK(navigable > 0);
+    OLAM_CHECK(riverWidthMeters(100 * 100) > riverWidthMeters(10 * 100) && riverWidthMeters(0) == 0.0f);
 }
 
 OLAM_TEST(soil_invariants)

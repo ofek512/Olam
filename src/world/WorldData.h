@@ -22,6 +22,8 @@ namespace olam
         std::vector<WorldCoord> path;
         // Hundredths of m^3/s at the mouth.
         std::uint32_t mouthDischarge = 0;
+        // Strahler order at the mouth (1 = unbranched headwater stream).
+        std::uint8_t order = 1;
         RiverEnd endsIn = RiverEnd::Ocean;
         // Set when endsIn is River / Lake.
         RiverId flowsInto;

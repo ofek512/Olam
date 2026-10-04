@@ -61,11 +61,12 @@ namespace olam
 
     std::string_view toString(RiverEnd end);
 
-    // Size class derived from discharge (see HydrologySettings).
+    // Size class derived from discharge (see HydrologySettings); not persisted.
     enum class RiverClass : std::uint8_t
     {
         None,
         Stream,
+        MinorRiver,
         River,
         Major,
         Count,

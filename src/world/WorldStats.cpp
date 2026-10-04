@@ -116,16 +116,25 @@ namespace olam
             const HydrologySettings &settings = config.generation.hydrology;
             std::size_t counts[static_cast<std::size_t>(RiverClass::Count)] = {};
             std::size_t longest = 0;
+            std::uint8_t maxOrder = 0;
             for (const River &river : hydrology.rivers)
             {
                 ++counts[static_cast<std::size_t>(riverClassForDischarge(settings, river.mouthDischarge))];
                 longest = std::max(longest, river.path.size());
+                maxOrder = std::max(maxOrder, river.order);
             }
+            std::size_t navigableTiles = 0;
+            for (std::size_t i = 0; i < hydrology.riverId.size(); ++i)
+                navigableTiles += hydrology.riverId[i].isValid() && isNavigable(world, i) ? 1u : 0u;
+            const double tileKm = config.tileSizeMeters / 1000.0;
             const double largest = hydrology.rivers.empty() ? 0.0 : hydrology.rivers.front().mouthDischarge / 100.0;
-            lines.push_back(std::format("Rivers {} (major {}, river {})   longest {:.0f} km   largest {:.0f} m3/s",
+            lines.push_back(std::format("Rivers {} (major {}, river {}, minor {})   longest {:.0f} km   largest {:.0f} m3/s",
                                         hydrology.rivers.size(), counts[static_cast<std::size_t>(RiverClass::Major)],
                                         counts[static_cast<std::size_t>(RiverClass::River)],
-                                        static_cast<double>(longest) * config.tileSizeMeters / 1000.0, largest));
+                                        counts[static_cast<std::size_t>(RiverClass::MinorRiver)],
+                                        static_cast<double>(longest) * tileKm, largest));
+            lines.push_back(std::format("River network: highest Strahler order {}   navigable {:.0f} km", maxOrder,
+                                        static_cast<double>(navigableTiles) * tileKm));
             std::uint32_t largestLake = 0;
             for (const Lake &lake : hydrology.lakes)
                 largestLake = std::max(largestLake, lake.tileCount);

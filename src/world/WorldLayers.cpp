@@ -92,9 +92,11 @@ namespace olam
             if (!riverId.isValid())
                 return "-";
             const River &river = world.hydrology().rivers[riverId.index()];
-            return std::format("#{} {}, {} tiles -> {}", riverId.value,
+            const std::uint32_t here = world.hydrology().discharge[index];
+            return std::format("#{} {}, order {}, {:.0f} m wide{} -> {}", riverId.value,
                                toString(riverClassForDischarge(world.config().generation.hydrology, river.mouthDischarge)),
-                               river.path.size(), toString(river.endsIn));
+                               river.order, riverWidthMeters(here), isNavigable(world, index) ? ", navigable" : "",
+                               toString(river.endsIn));
         }
         case LayerId::LakeId:
         {
