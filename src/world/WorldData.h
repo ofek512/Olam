@@ -48,6 +48,22 @@ namespace olam
         std::vector<RiverId> inflows;
     };
 
+    // A drainage basin: all land draining to one outlet, with small neighbouring coastal catchments merged in.
+    struct Watershed
+    {
+        WatershedId id;
+        // Where the largest member catchment reaches the sea or the map edge.
+        WorldCoord outlet;
+        std::uint32_t tileCount = 0;
+        // Hundredths of m^3/s leaving through all member outlets.
+        std::uint32_t outletDischarge = 0;
+        // Largest river ending in the basin; invalid when the basin has no river.
+        RiverId mainRiver;
+        // In id order (largest first).
+        std::vector<RiverId> rivers;
+        std::vector<LakeId> lakes;
+    };
+
     // Persistent layer groups. Each layer is added together with the generation pass that produces it.
     struct TerrainData
     {
@@ -78,9 +94,12 @@ namespace olam
         Layer<std::uint32_t> discharge;
         Layer<RiverId> riverId;
         Layer<LakeId> lakeId;
+        // Invalid on ocean tiles.
+        Layer<WatershedId> watershedId;
         // Indexed by id.index().
         std::vector<River> rivers;
         std::vector<Lake> lakes;
+        std::vector<Watershed> watersheds;
     };
 
     struct GeographyData

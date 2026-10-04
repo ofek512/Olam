@@ -28,6 +28,7 @@ namespace olam
         DistanceToOcean,
         TreeCover,
         Atlas,
+        Watersheds,
         HashDebug,
         Count,
     };

@@ -1,6 +1,7 @@
 #include "tools/world_viewer/WorldViews.h"
 
 #include "core/debug/Assert.h"
+#include "core/random/SplitMix64.h"
 #include "tools/world_viewer/ColorRamp.h"
 #include "tools/world_viewer/DebugHashView.h"
 #include "world/World.h"
@@ -34,6 +35,7 @@ namespace olam
             {"Distance to ocean", Key::Unknown},
             {"Tree cover", Key::Unknown},
             {"Atlas (elevation tints)", Key::Unknown},
+            {"Watersheds", Key::Unknown},
             {"Hash debug", Key::Unknown},
         }};
 
@@ -474,6 +476,43 @@ namespace olam
             }
         }
 
+        // Each basin in its own pastel colour, basin borders dark, rivers on top.
+        void colorizeWatersheds(const World &world, const ViewOptions &options, std::span<std::uint8_t> rgba)
+        {
+            const auto &watershed = world.hydrology().watershedId;
+            for (int y = 0; y < world.height(); ++y)
+            {
+                for (int x = 0; x < world.width(); ++x)
+                {
+                    const std::size_t i = watershed.index(x, y);
+                    const WatershedId id = watershed[i];
+                    if (!id.isValid())
+                    {
+                        writePixel(rgba, i, {25, 35, 60});
+                        continue;
+                    }
+                    const bool border = (x + 1 < world.width() && watershed.at(x + 1, y).isValid() &&
+                                         watershed.at(x + 1, y) != id) ||
+                                        (y + 1 < world.height() && watershed.at(x, y + 1).isValid() &&
+                                         watershed.at(x, y + 1) != id);
+                    if (border)
+                    {
+                        writePixel(rgba, i, {40, 40, 40});
+                        continue;
+                    }
+                    const std::uint64_t hash = splitMix64(id.value);
+                    Rgb color{static_cast<std::uint8_t>(110 + (hash & 0x7F)), static_cast<std::uint8_t>(110 + ((hash >> 8) & 0x7F)),
+                              static_cast<std::uint8_t>(110 + ((hash >> 16) & 0x7F))};
+                    if (world.hydrology().surfaceWater[i] == SurfaceWater::Lake)
+                        color = kLakeColor;
+                    else if (options.hillshade)
+                        color = scale(color, hillshade(world, x, y));
+                    riverColor(world, i, color);
+                    writePixel(rgba, i, color);
+                }
+            }
+        }
+
         // Muted land with the whole drainage network: faint below the stream threshold, then by river class.
         void colorizeHydrology(const World &world, const ViewOptions &options, std::span<std::uint8_t> rgba)
         {
@@ -541,6 +580,8 @@ namespace olam
             return !world.climate().moisture.empty();
         case WorldView::Hydrology:
             return !world.hydrology().discharge.empty();
+        case WorldView::Watersheds:
+            return !world.hydrology().watershedId.empty();
         case WorldView::Soil:
             return !world.geography().soil.empty();
         case WorldView::Biome:
@@ -590,6 +631,9 @@ namespace olam
             break;
         case WorldView::Atlas:
             colorizeAtlas(world, options, rgba);
+            break;
+        case WorldView::Watersheds:
+            colorizeWatersheds(world, options, rgba);
             break;
         case WorldView::Elevation:
             colorizeElevation(world, options, rgba);

@@ -110,6 +110,7 @@ add_library(olam_worldgen STATIC
     src/worldgen/passes/TemperaturePass.cpp
     src/worldgen/passes/RainfallPass.cpp
     src/worldgen/passes/HydrologyPass.cpp
+    src/worldgen/passes/WatershedPass.cpp
     src/worldgen/passes/SoilPass.cpp
     src/worldgen/passes/BiomePass.cpp
     src/worldgen/passes/FertilityPass.cpp

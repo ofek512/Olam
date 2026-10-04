@@ -131,6 +131,17 @@ namespace olam
                 largestLake = std::max(largestLake, lake.tileCount);
             const double tileKm2 = config.tileSizeMeters * config.tileSizeMeters / 1.0e6;
             lines.push_back(std::format("Lakes {}   largest {:.0f} km2", hydrology.lakes.size(), largestLake * tileKm2));
+
+            if (!hydrology.watersheds.empty())
+            {
+                std::size_t large = 0;
+                for (const Watershed &watershed : hydrology.watersheds)
+                    large += watershed.tileCount * tileKm2 >= 50000.0 ? 1u : 0u;
+                const Watershed &biggest = hydrology.watersheds.front();
+                lines.push_back(std::format("Watersheds {} (>= 50,000 km2: {})   largest {:.0f} km2, {:.0f} m3/s",
+                                            hydrology.watersheds.size(), large, biggest.tileCount * tileKm2,
+                                            biggest.outletDischarge / 100.0));
+            }
         }
 
         const auto &biome = world.geography().biome;

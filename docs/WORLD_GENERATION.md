@@ -29,6 +29,7 @@ Regions, settlement suitability, settlements, roads and factions belong to Phase
 | TemperaturePass | `meanAnnualTemperature`                                          |
 | RainfallPass    | `annualRainfall`, `moisture`                                     |
 | HydrologyPass   | `flowDirection`, `discharge`, `riverId`, `lakeId`, rivers, lakes |
+| WatershedPass   | `watershedId`, watersheds                                        |
 | SoilPass        | `soil`                                                           |
 | BiomePass       | `biome`                                                          |
 | FertilityPass   | `fertility`                                                      |
@@ -175,6 +176,15 @@ other intermediate layers.
   a tributary; ids are ordered by mouth discharge. No valley carving in V0.1.
 - A floodplain working layer (strength by distance to the river, width growing with √discharge, fading with
   height above the river) is left for soil and fertility.
+
+### Watersheds
+
+- Every land / lake tile follows its flow direction to the outlet where it reaches the sea or the map edge; tiles
+  sharing an outlet form a catchment. Catchments below `minWatershedKm2` (4000 km²: coastal strips, short streams)
+  repeatedly merge into the neighbouring basin they share the longest border with; isolated small islands stay
+  separate. Water never crosses a basin border except into the sea.
+- `Watershed {id, outlet (largest member outlet), tileCount, outletDischarge, mainRiver, rivers, lakes}`, ids by
+  size (largest first); persistent `watershedId` layer. Tab-only "Watersheds" view. Basis for natural regions.
 
 ### Soil, biome, fertility, vegetation
 

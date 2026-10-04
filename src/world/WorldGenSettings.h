@@ -107,6 +107,8 @@ namespace olam
         float floodplainBaseKm = 3.0f;
         float floodplainKmPerSqrtDischarge = 0.5f;
         float floodplainMaxRiseM = 30.0f;
+        // Catchments smaller than this merge into the neighbouring basin they share the longest border with.
+        float minWatershedKm2 = 4000.0f;
     };
 
     struct SoilSettings
@@ -259,6 +261,7 @@ namespace olam
         visit(hydro.floodplainBaseKm);
         visit(hydro.floodplainKmPerSqrtDischarge);
         visit(hydro.floodplainMaxRiseM);
+        visit(hydro.minWatershedKm2);
 
         auto &soil = settings.soil;
         visit(soil.permafrostMaxC);

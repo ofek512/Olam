@@ -14,6 +14,7 @@ namespace olam::worldgen
     inline constexpr std::uint64_t kClimateSeedId = seedId("CLIMATE");
     inline constexpr std::uint64_t kRainfallSeedId = seedId("RAINFALL");
     inline constexpr std::uint64_t kHydrologySeedId = seedId("HYDRO");
+    inline constexpr std::uint64_t kWatershedSeedId = seedId("WATERSHD");
     inline constexpr std::uint64_t kSoilSeedId = seedId("SOIL");
     inline constexpr std::uint64_t kBiomeSeedId = seedId("BIOME");
     inline constexpr std::uint64_t kFertilitySeedId = seedId("FERTILE");

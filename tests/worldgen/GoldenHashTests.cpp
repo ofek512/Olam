@@ -21,7 +21,7 @@ namespace
     // or layer storage changes these on purpose; regenerate them only for intended changes (the test prints the
     // new table). They must also match across MSVC, GCC and Clang.
     constexpr GoldenHash kGolden[] = {
-        {"<combined>", 0x60D2CC2371EDE5B3ull},
+        {"<combined>", 0xF0D4A7BEDA7BDEC9ull},
         {"Plate", 0x47B4118619B7445Eull},
         {"Rock", 0xB11D48E15E367E7Aull},
         {"Elevation", 0xFF55724082B7350Eull},
@@ -41,7 +41,8 @@ namespace
         {"Tree cover", 0x34B4A128CE81506Cull},
         {"Deposit", 0x4ECB0EC059C75102ull},
         {"Province", 0x5AE4089D8DD58222ull},
-        {"Rivers + lakes", 0xF32EE42CC623BC53ull},
+        {"Watershed", 0x0BCC3F7747627A96ull},
+        {"Rivers + lakes", 0xB33AAAA00A40F366ull},
         {"Deposits", 0xF9BD4B0E21281358ull},
     };
 

@@ -30,6 +30,7 @@ namespace olam
         std::size_t entityCount(const World &world, RiverId) { return world.hydrology().rivers.size(); }
         std::size_t entityCount(const World &world, LakeId) { return world.hydrology().lakes.size(); }
         std::size_t entityCount(const World &world, DepositId) { return world.resources().deposits.size(); }
+        std::size_t entityCount(const World &world, WatershedId) { return world.hydrology().watersheds.size(); }
 
         template <typename Id>
         bool isValidReference(const World &world, Id id)
@@ -136,6 +137,37 @@ namespace olam
                 if (!valid)
                     return std::format("lake {} references a missing river", lake.id.value);
             }
+
+            std::uint32_t watershedCount = 0;
+            if (!readCount(reader, 4, watershedCount))
+                return "truncated watershed list";
+            hydrology.watersheds.resize(watershedCount);
+            for (std::uint32_t w = 0; w < watershedCount; ++w)
+            {
+                Watershed &watershed = hydrology.watersheds[w];
+                std::uint32_t basinRivers = 0;
+                std::uint32_t basinLakes = 0;
+                if (!reader.read(watershed.id) || watershed.id != WatershedId::fromIndex(w) ||
+                    !readCoord(reader, watershed.outlet) || !world.isValid(watershed.outlet) ||
+                    !reader.read(watershed.tileCount) || !reader.read(watershed.outletDischarge) ||
+                    !reader.read(watershed.mainRiver) || !isValidReference(world, watershed.mainRiver) ||
+                    !readCount(reader, 4, basinRivers))
+                    return std::format("invalid watershed {}", w + 1);
+                watershed.rivers.resize(basinRivers);
+                for (RiverId &river : watershed.rivers)
+                {
+                    if (!reader.read(river) || !isValidReference(world, river))
+                        return std::format("invalid rivers of watershed {}", w + 1);
+                }
+                if (!readCount(reader, 4, basinLakes))
+                    return std::format("invalid watershed {}", w + 1);
+                watershed.lakes.resize(basinLakes);
+                for (LakeId &lake : watershed.lakes)
+                {
+                    if (!reader.read(lake) || !isValidReference(world, lake))
+                        return std::format("invalid lakes of watershed {}", w + 1);
+                }
+            }
             return std::nullopt;
         }
 
@@ -193,6 +225,21 @@ namespace olam
             writer.write(static_cast<std::uint32_t>(lake.inflows.size()));
             for (const RiverId inflow : lake.inflows)
                 writer.write(inflow);
+        }
+        writer.write(static_cast<std::uint32_t>(hydrology.watersheds.size()));
+        for (const Watershed &watershed : hydrology.watersheds)
+        {
+            writer.write(watershed.id);
+            writeCoord(writer, watershed.outlet);
+            writer.write(watershed.tileCount);
+            writer.write(watershed.outletDischarge);
+            writer.write(watershed.mainRiver);
+            writer.write(static_cast<std::uint32_t>(watershed.rivers.size()));
+            for (const RiverId river : watershed.rivers)
+                writer.write(river);
+            writer.write(static_cast<std::uint32_t>(watershed.lakes.size()));
+            for (const LakeId lake : watershed.lakes)
+                writer.write(lake);
         }
     }
 

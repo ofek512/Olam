@@ -87,7 +87,7 @@ namespace olam
               hydro.routingNoiseWavelengthKm > 0.0f && hydro.streamDischarge > 0.0f &&
               hydro.riverDischarge >= hydro.streamDischarge && hydro.majorRiverDischarge >= hydro.riverDischarge &&
               hydro.majorRiverDischarge < 1.0e7f && hydro.floodplainBaseKm >= 0.0f &&
-              hydro.floodplainKmPerSqrtDischarge >= 0.0f && hydro.floodplainMaxRiseM > 0.0f))
+              hydro.floodplainKmPerSqrtDischarge >= 0.0f && hydro.floodplainMaxRiseM > 0.0f && hydro.minWatershedKm2 >= 0.0f))
             return "hydrology settings out of range";
         const auto &soil = settings.soil;
         if (!(soil.rockySlope > 0.0f && soil.rockyHardRockSlope > 0.0f && soil.rockyElevationM > 0.0f &&

@@ -33,6 +33,7 @@ namespace olam
         TreeCover,
         DepositId,
         Province,
+        Watershed,
         Count,
     };
 
@@ -108,6 +109,9 @@ namespace olam
             break;
         case LayerId::Province:
             f(world.terrain().province);
+            break;
+        case LayerId::Watershed:
+            f(world.hydrology().watershedId);
             break;
         case LayerId::Count:
             break;

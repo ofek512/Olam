@@ -143,6 +143,63 @@ OLAM_TEST(hydrology_entities_are_consistent)
     }
 }
 
+OLAM_TEST(watershed_invariants)
+{
+    const auto world = test::generateWorld(42, test::smallWorldConfig(512, 512));
+    OLAM_CHECK(world != nullptr);
+    if (!world)
+        return;
+    const HydrologyData &hydrology = world->hydrology();
+    const auto &watershed = hydrology.watershedId;
+    OLAM_CHECK(!hydrology.watersheds.empty());
+
+    std::vector<std::uint32_t> tiles(hydrology.watersheds.size(), 0);
+    std::vector<std::uint8_t> bordersOther(hydrology.watersheds.size(), 0);
+    for (int y = 0; y < world->height(); ++y)
+    {
+        for (int x = 0; x < world->width(); ++x)
+        {
+            const std::size_t i = world->index({x, y});
+            const bool ocean = hydrology.surfaceWater[i] == SurfaceWater::Ocean;
+            OLAM_CHECK(ocean != watershed[i].isValid());
+            if (ocean)
+                continue;
+            ++tiles[watershed[i].index()];
+            // Water never leaves its basin except to the sea or off the map.
+            const std::size_t next = downstreamOf(*world, i);
+            if (next < world->tileCount() && hydrology.surfaceWater[next] != SurfaceWater::Ocean)
+                OLAM_CHECK(watershed[next] == watershed[i]);
+            if (x + 1 < world->width() && watershed.at(x + 1, y).isValid() && watershed.at(x + 1, y) != watershed[i])
+            {
+                bordersOther[watershed[i].index()] = 1;
+                bordersOther[watershed.at(x + 1, y).index()] = 1;
+            }
+        }
+    }
+
+    const double tileKm2 = world->config().tileSizeMeters * world->config().tileSizeMeters / 1.0e6;
+    const double minKm2 = world->config().generation.hydrology.minWatershedKm2;
+    for (std::size_t w = 0; w < hydrology.watersheds.size(); ++w)
+    {
+        const Watershed &basin = hydrology.watersheds[w];
+        OLAM_CHECK(basin.id == WatershedId::fromIndex(w));
+        OLAM_CHECK(basin.tileCount == tiles[w]);
+        if (w > 0)
+            OLAM_CHECK(hydrology.watersheds[w - 1].tileCount >= basin.tileCount);
+        OLAM_CHECK(watershed[world->index(basin.outlet)] == basin.id);
+        // Only isolated land (small islands) stays below the minimum size.
+        if (basin.tileCount * tileKm2 < minKm2)
+            OLAM_CHECK(!bordersOther[w]);
+        if (basin.mainRiver.isValid())
+        {
+            OLAM_CHECK(!basin.rivers.empty() && basin.rivers.front() == basin.mainRiver);
+            OLAM_CHECK(watershed[world->index(hydrology.rivers[basin.mainRiver.index()].mouth())] == basin.id);
+        }
+        for (const LakeId lake : basin.lakes)
+            OLAM_CHECK(watershed[world->index(hydrology.lakes[lake.index()].outlet)] == basin.id);
+    }
+}
+
 OLAM_TEST(soil_invariants)
 {
     const auto world = test::generateWorld(42, test::smallWorldConfig(512, 256));

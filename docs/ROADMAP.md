@@ -44,7 +44,7 @@ Short status checklist. Full vision and rationale: [agent.MD](../agent.MD).
 
 - [x] 3.5A Landmass analysis (landmasses, size classes, coastline, structure; `olam_generate --landmass-survey`)
 - [x] 3.5B Macro landmass variety (continental plates grouped into 1-7 continents with ocean gaps)
-- [ ] 3.5C Watersheds / drainage basins
+- [x] 3.5C Watersheds / drainage basins
 - [ ] 3.5D River order, width class, navigability
 
 ## Phase 4 — Civilization foundations (= Milestone 2)

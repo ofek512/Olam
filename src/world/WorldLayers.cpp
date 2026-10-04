@@ -31,6 +31,7 @@ namespace olam
             {LayerId::TreeCover, "Tree cover", "%"},
             {LayerId::DepositId, "Deposit", ""},
             {LayerId::Province, "Province", ""},
+            {LayerId::Watershed, "Watershed", ""},
         };
 
         constexpr std::string_view kDirectionNames[] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
@@ -124,6 +125,17 @@ namespace olam
         }
         case LayerId::Province:
             return std::string(toString(world.terrain().province[index]));
+        case LayerId::Watershed:
+        {
+            const WatershedId watershedId = world.hydrology().watershedId[index];
+            if (!watershedId.isValid())
+                return "-";
+            const Watershed &watershed = world.hydrology().watersheds[watershedId.index()];
+            const double km2 = watershed.tileCount * world.config().tileSizeMeters * world.config().tileSizeMeters / 1.0e6;
+            return watershed.mainRiver.isValid()
+                       ? std::format("#{} {:.0f} km2, main river #{}", watershedId.value, km2, watershed.mainRiver.value)
+                       : std::format("#{} {:.0f} km2", watershedId.value, km2);
+        }
         case LayerId::Count:
             break;
         }
