@@ -176,7 +176,7 @@ other intermediate layers.
   smaller river ends as a tributary; ids are ordered by mouth discharge. No valley carving in V0.1.
 - Each `River` stores its Strahler order at the mouth (a lake passes on the highest inflowing order as one branch).
   Derived on demand: channel width `riverWidthMeters` (~4.5 √Q m) and `isNavigable` (lakes, and river tiles with
-  >= 60 m³/s falling <= 1.5 m/km to the next tile; shown in teal in the Hydrology view).
+  > = 60 m³/s falling <= 1.5 m/km to the next tile; shown in teal in the Hydrology view).
 - A floodplain working layer (strength by distance to the river, width growing with √discharge, fading with
   height above the river) is left for soil and fertility.
 
