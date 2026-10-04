@@ -10,12 +10,17 @@ namespace olam
     struct TectonicsSettings
     {
         std::int32_t plateCount = 16;
-        float continentalFraction = 0.45f;
+        float continentalFraction = 0.55f;
+        // Continental plates are grouped into this many continents (drawn per seed); different continents keep an
+        // ocean of about twice continentGapKm between them.
+        std::int32_t continentCountMin = 1;
+        std::int32_t continentCountMax = 7;
+        float continentGapKm = 450.0f;
         // Domain-warp amplitude that makes plate boundaries irregular.
         float boundaryWarpKm = 350.0f;
         float boundaryWarpWavelengthKm = 1200.0f;
         // Distance over which neighbouring plate base heights blend into each other.
-        float boundaryBlendKm = 400.0f;
+        float boundaryBlendKm = 250.0f;
         // Width of the volcanic / metamorphic rock belt along active boundaries.
         float beltWidthKm = 100.0f;
         // Half-width of the uplift zone along converging boundaries / of the depression along diverging ones.
@@ -40,7 +45,7 @@ namespace olam
         // Uplift of ancient (eroded) belts: uplands and hills rather than high ranges.
         float ancientUpliftStrength = 0.2f;
         float riftStrength = 0.15f;
-        float noiseStrength = 0.45f;
+        float noiseStrength = 0.30f;
         float noiseWavelengthKm = 1400.0f;
         std::int32_t noiseOctaves = 8;
         std::int32_t smoothingIterations = 3;
@@ -195,6 +200,9 @@ namespace olam
         auto &t = settings.tectonics;
         visit(t.plateCount);
         visit(t.continentalFraction);
+        visit(t.continentCountMin);
+        visit(t.continentCountMax);
+        visit(t.continentGapKm);
         visit(t.boundaryWarpKm);
         visit(t.boundaryWarpWavelengthKm);
         visit(t.boundaryBlendKm);

@@ -2,6 +2,7 @@
 
 #include "world/World.h"
 #include "world/queries/HydrologyQueries.h"
+#include "world/queries/LandmassQueries.h"
 
 #include <algorithm>
 #include <format>
@@ -74,6 +75,15 @@ namespace olam
             lines.push_back(std::format("Land {:.1f} %   ocean {:.1f} %   lakes {:.1f} %   max {} km from sea",
                                         percent(SurfaceWater::Land), percent(SurfaceWater::Ocean),
                                         percent(SurfaceWater::Lake), farthest));
+
+            const LandmassSummary landmasses = analyzeLandmasses(world);
+            const auto count = [&](LandmassClass kind)
+            { return landmasses.classCounts[static_cast<std::size_t>(kind)]; };
+            lines.push_back(std::format("Landmasses {} (continents {}, large islands {}, islands {})   largest {:.0f} %   "
+                                        "coast {:.0f} km   {}",
+                                        landmasses.landmasses.size(), count(LandmassClass::Continent),
+                                        count(LandmassClass::LargeIsland), count(LandmassClass::Island),
+                                        landmasses.share(0) * 100.0, landmasses.coastlineKm, toString(landmasses.structure)));
         }
 
         const auto &rainfall = world.climate().annualRainfall;

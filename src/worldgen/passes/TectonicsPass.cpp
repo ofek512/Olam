@@ -27,6 +27,8 @@ namespace olam
             float driftY;
             float baseHeight;
             bool continental;
+            // Continent the plate belongs to; -1 for oceanic plates.
+            int continent = -1;
         };
 
         std::vector<Plate> createPlates(const World &world, int count, std::uint64_t seed)
@@ -130,6 +132,79 @@ namespace olam
             return contact;
         }
 
+        // Groups continental plates into a per-seed number of continents: well-spread seed plates each gather the
+        // nearest remaining plates. Independent coin flips would merge neighbouring continental plates into one mass.
+        void assignContinents(std::vector<Plate> &plates, const TectonicsSettings &settings, std::uint64_t seed)
+        {
+            Pcg32 rng(seed);
+            const int plateCount = static_cast<int>(plates.size());
+            const int continents = std::min(rng.nextInt(settings.continentCountMin, settings.continentCountMax), plateCount - 1);
+            const int continental = std::clamp(
+                static_cast<int>(std::floor(settings.continentalFraction * static_cast<float>(plateCount) + 0.5f)), continents,
+                plateCount - 1);
+            const auto distanceSq = [&](std::size_t a, std::size_t b)
+            {
+                const float dx = plates[a].x - plates[b].x;
+                const float dy = plates[a].y - plates[b].y;
+                return dx * dx + dy * dy;
+            };
+
+            for (Plate &plate : plates)
+                plate.continent = -1;
+
+            // Seeds: random first, then farthest-point sampling.
+            std::vector<std::size_t> seeds = {rng.nextBounded(static_cast<std::uint32_t>(plateCount))};
+            plates[seeds[0]].continent = 0;
+            while (static_cast<int>(seeds.size()) < continents)
+            {
+                std::size_t best = 0;
+                float bestDistance = -1.0f;
+                for (std::size_t p = 0; p < plates.size(); ++p)
+                {
+                    if (plates[p].continent >= 0)
+                        continue;
+                    float nearest = 3.4e38f;
+                    for (const std::size_t s : seeds)
+                        nearest = std::min(nearest, distanceSq(p, s));
+                    if (nearest > bestDistance)
+                    {
+                        bestDistance = nearest;
+                        best = p;
+                    }
+                }
+                plates[best].continent = static_cast<int>(seeds.size());
+                seeds.push_back(best);
+            }
+
+            // Continents take turns adding the unassigned plate closest to any of their plates.
+            for (int assigned = continents, turn = 0; assigned < continental; ++assigned, ++turn)
+            {
+                const int continent = turn % continents;
+                std::size_t best = 0;
+                float bestDistance = 3.4e38f;
+                for (std::size_t p = 0; p < plates.size(); ++p)
+                {
+                    if (plates[p].continent >= 0)
+                        continue;
+                    for (std::size_t q = 0; q < plates.size(); ++q)
+                    {
+                        if (plates[q].continent == continent && distanceSq(p, q) < bestDistance)
+                        {
+                            bestDistance = distanceSq(p, q);
+                            best = p;
+                        }
+                    }
+                }
+                plates[best].continent = continent;
+            }
+
+            for (Plate &plate : plates)
+            {
+                plate.continental = plate.continent >= 0;
+                plate.baseHeight = plate.continental ? 0.55f + 0.10f * rng.nextFloat01() : 0.20f + 0.08f * rng.nextFloat01();
+            }
+        }
+
     } // namespace
 
     void TectonicsPass::run(WorldGenContext &context)
@@ -141,7 +216,8 @@ namespace olam
         const int height = world.height();
         const auto tileKm = static_cast<float>(world.config().tileSizeMeters / 1000.0);
 
-        const std::vector<Plate> plates = createPlates(world, settings.plateCount, seed);
+        std::vector<Plate> plates = createPlates(world, settings.plateCount, seed);
+        assignContinents(plates, settings, deriveSeed(seed, olam::seedId("CONTINEN")));
         const std::vector<Plate> paleoPlates =
             createPlates(world, settings.paleoPlateCount, deriveSeed(seed, olam::seedId("PALEO")));
         const std::uint64_t warpSeedX = deriveSeed(seed, olam::seedId("WARPX"));
@@ -179,9 +255,15 @@ namespace olam
                 const float distance = contact.distanceKm;
                 const float converging = contact.converging;
                 const int contacts = (own.continental ? 1 : 0) + (other.continental ? 1 : 0);
+                // Different continents meeting: keep an ocean between them instead of welding them together.
+                const bool separateContinents = contacts == 2 && own.continent != other.continent;
 
                 base[i] = own.baseHeight;
-                if (converging > 0.0f)
+                if (separateContinents)
+                {
+                    base[i] = lerp(0.24f, own.baseHeight, smoothstep(0.0f, settings.continentGapKm, distance));
+                }
+                else if (converging > 0.0f)
                 {
                     // Ocean-ocean convergence makes island arcs rather than full ranges.
                     const float kind = contacts > 0 ? 1.0f : 0.6f;
@@ -201,7 +283,7 @@ namespace olam
 
                 // Active belts first; plate interiors are decided after the crust field is smoothed.
                 RockType rock = RockType::Count;
-                const bool inBelt = distance < settings.beltWidthKm;
+                const bool inBelt = distance < settings.beltWidthKm && !separateContinents;
                 if (inBelt && converging > 0.2f)
                 {
                     rock = contacts == 2 ? RockType::Metamorphic : RockType::Igneous;

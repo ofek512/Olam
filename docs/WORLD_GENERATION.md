@@ -123,6 +123,11 @@ other intermediate layers.
 
 - Own 2D gradient (Perlin-style) noise with fBm and ridged variants; gradients come from `coordinateHash`.
 - ~16 Voronoi plates (domain-warped boundaries) placed with PCG; each is continental or oceanic and drifts.
+  Continental plates (55 %) are grouped into a per-seed number of continents (1-7): farthest-point seed plates
+  each gather their nearest plates in turn. Where plates of different continents meet, the base height dips to
+  ocean over `continentGapKm` instead of forming a collision range, so continents stay separate. A survey of 60
+  seeds at 2048² gives ~35 % one dominant continent, ~22 % two continents, ~40 % several continents (archipelagos
+  are rare, which is accepted).
   Converging boundaries raise mountain ranges / volcanic arcs, diverging boundaries form rifts and seas.
 - `rockType` from plate context: sedimentary (basins, lowlands), igneous (arcs, rifts, ocean floor),
   metamorphic (old mountain belts, shields).

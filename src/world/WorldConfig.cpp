@@ -47,6 +47,9 @@ namespace olam
             return std::format("plate count {} must be within [2, 255]", t.plateCount);
         if (!(t.continentalFraction > 0.0f && t.continentalFraction < 1.0f))
             return "continental fraction must be within (0, 1)";
+        if (t.continentCountMin < 1 || t.continentCountMax < t.continentCountMin || t.continentCountMax > t.plateCount ||
+            !(t.continentGapKm >= 0.0f))
+            return "continent count / gap settings out of range";
         if (!(t.boundaryWarpKm >= 0.0f && t.boundaryWarpWavelengthKm > 0.0f && t.boundaryBlendKm > 0.0f &&
               t.beltWidthKm > 0.0f && t.mountainWidthKm > 0.0f && t.riftWidthKm > 0.0f))
             return "tectonic distances must be positive";

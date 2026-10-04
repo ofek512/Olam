@@ -1,6 +1,7 @@
 #include "TestFramework.h"
 #include "worldgen/WorldGenTestUtil.h"
 
+#include "world/queries/LandmassQueries.h"
 #include "worldgen/util/DistanceTransform.h"
 
 #include <cstdlib>
@@ -56,4 +57,32 @@ OLAM_TEST(ocean_invariants)
                 OLAM_CHECK(std::abs(static_cast<int>(distance[i]) - static_cast<int>(distance.at(x + 1, y))) <= 2);
         }
     }
+}
+
+OLAM_TEST(landmass_analysis_invariants)
+{
+    const auto world = test::generateWorld(42, test::smallWorldConfig(512, 512));
+    OLAM_CHECK(world != nullptr);
+    if (!world)
+        return;
+    const LandmassSummary summary = analyzeLandmasses(*world);
+    std::size_t nonOcean = 0;
+    for (const SurfaceWater kind : world->hydrology().surfaceWater.values())
+        nonOcean += kind != SurfaceWater::Ocean ? 1u : 0u;
+    OLAM_CHECK(summary.landTiles == nonOcean);
+    OLAM_CHECK(!summary.landmasses.empty());
+
+    std::size_t total = 0;
+    std::size_t classified = 0;
+    for (std::size_t n = 0; n < summary.landmasses.size(); ++n)
+    {
+        total += summary.landmasses[n].tileCount;
+        if (n > 0)
+            OLAM_CHECK(summary.landmasses[n - 1].tileCount >= summary.landmasses[n].tileCount);
+    }
+    for (const std::size_t count : summary.classCounts)
+        classified += count;
+    OLAM_CHECK(total == summary.landTiles && classified == summary.landmasses.size());
+    OLAM_CHECK(summary.coastlineKm > 0.0 && summary.share(0) > 0.0 && summary.share(0) <= 1.0);
+    OLAM_CHECK(summary.structure < LandStructure::Count);
 }

@@ -88,6 +88,7 @@ add_library(olam_world STATIC
     src/world/queries/HydrologyQueries.cpp
     src/world/queries/AgricultureQueries.cpp
     src/world/queries/ResourceQueries.cpp
+    src/world/queries/LandmassQueries.cpp
 )
 target_link_libraries(olam_world
     PUBLIC olam_core
@@ -121,7 +122,7 @@ target_link_libraries(olam_worldgen
 )
 
 # Headless world generator (timings, stats, saving); no SDL.
-add_executable(olam_generate src/tools/generate/main.cpp)
+add_executable(olam_generate src/tools/generate/main.cpp src/tools/generate/PngWriter.cpp)
 target_link_libraries(olam_generate PRIVATE olam_worldgen olam_warnings)
 
 # ---------------------------------------------------------------------------
