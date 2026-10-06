@@ -122,9 +122,33 @@ target_link_libraries(olam_worldgen
     PRIVATE olam_warnings
 )
 
+# ---------------------------------------------------------------------------
+# olam_settlement: local settlement maps derived from a World (no SDL, no worldgen).
+# ---------------------------------------------------------------------------
+add_library(olam_settlement STATIC
+    src/settlement/LocalTypes.cpp
+    src/settlement/SettlementConfig.cpp
+    src/settlement/SettlementMap.cpp
+    src/settlement/SiteSelection.cpp
+    src/settlement/LocalMapGenerator.cpp
+)
+target_link_libraries(olam_settlement
+    PUBLIC olam_world
+    PRIVATE olam_warnings
+)
+
+# Colouring of local maps (no SDL): shared by the viewer and headless PNG output.
+add_library(olam_settlement_views STATIC
+    src/tools/settlement_viewer/LocalViews.cpp
+)
+target_link_libraries(olam_settlement_views
+    PUBLIC olam_settlement
+    PRIVATE olam_warnings
+)
+
 # Headless world generator (timings, stats, saving); no SDL.
 add_executable(olam_generate src/tools/generate/main.cpp src/tools/generate/PngWriter.cpp)
-target_link_libraries(olam_generate PRIVATE olam_worldgen olam_warnings)
+target_link_libraries(olam_generate PRIVATE olam_worldgen olam_settlement_views olam_warnings)
 
 # ---------------------------------------------------------------------------
 # SDL-dependent targets

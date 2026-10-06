@@ -4,10 +4,15 @@
 
 #include "core/logging/Log.h"
 #include "core/random/Seed.h"
+#include "settlement/LocalMapGenerator.h"
+#include "settlement/SiteSelection.h"
 #include "tools/generate/PngWriter.h"
+#include "tools/settlement_viewer/LocalViews.h"
 #include "world/WorldHash.h"
 #include "world/WorldIO.h"
+#include "world/queries/HydrologyQueries.h"
 #include "world/queries/LandmassQueries.h"
+#include "world/queries/TerrainQueries.h"
 #include "worldgen/DefaultPipeline.h"
 #include "worldgen/WorldGenerator.h"
 #include "worldgen/passes/ElevationPass.h"
@@ -18,7 +23,10 @@
 #include <charconv>
 #include <chrono>
 #include <cstdio>
+#include <format>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -142,6 +150,149 @@ namespace
         return 0;
     }
 
+    // A valid settlement site of the given kind, closest to the world centre; or the explicit "x,y".
+    std::optional<olam::WorldCoord> pickSite(const olam::World &world, const olam::SettlementConfig &config, std::string_view kind)
+    {
+        using namespace olam;
+        const std::size_t comma = kind.find(',');
+        if (comma != std::string_view::npos)
+        {
+            WorldCoord coord;
+            const std::string_view xs = kind.substr(0, comma);
+            const std::string_view ys = kind.substr(comma + 1);
+            if (std::from_chars(xs.data(), xs.data() + xs.size(), coord.x).ec != std::errc{} ||
+                std::from_chars(ys.data(), ys.data() + ys.size(), coord.y).ec != std::errc{})
+                return std::nullopt;
+            return coord;
+        }
+        const auto matches = [&](WorldCoord c, std::size_t i)
+        {
+            const auto &hydrology = world.hydrology();
+            if (kind == "river")
+                return riverClassAt(world, i) >= RiverClass::River;
+            if (kind == "coast")
+            {
+                for (std::size_t d = 0; d < kDirection8Count; d += 2)
+                {
+                    const WorldCoord n = neighbor(c, static_cast<Direction8>(d));
+                    if (hydrology.surfaceWater[world.index(n)] == SurfaceWater::Ocean)
+                        return true;
+                }
+                return false;
+            }
+            if (kind == "forest")
+                return world.geography().treeCover[i] >= 70;
+            if (kind == "plain")
+                return world.geography().fertility[i] >= 180 && world.climate().moisture[i] >= 40 &&
+                       world.geography().treeCover[i] < 40 && slopeAt(world, c) < 0.01f;
+            if (kind == "mountain")
+                return world.terrain().elevation[i] >= 1000 && slopeAt(world, c) >= 0.08f;
+            if (kind == "dry")
+                return world.climate().moisture[i] < 26;
+            if (kind == "lake")
+            {
+                for (std::size_t d = 0; d < kDirection8Count; ++d)
+                {
+                    const WorldCoord n = neighbor(c, static_cast<Direction8>(d));
+                    if (hydrology.surfaceWater[world.index(n)] == SurfaceWater::Lake)
+                        return true;
+                }
+                return false;
+            }
+            return false;
+        };
+        std::optional<WorldCoord> best;
+        std::int64_t bestDistance = std::numeric_limits<std::int64_t>::max();
+        for (int y = 0; y < world.height(); ++y)
+        {
+            for (int x = 0; x < world.width(); ++x)
+            {
+                const WorldCoord c{x, y};
+                if (siteError(world, c, config) || !matches(c, world.index(c)))
+                    continue;
+                const std::int64_t dx = x - world.width() / 2;
+                const std::int64_t dy = y - world.height() / 2;
+                if (dx * dx + dy * dy < bestDistance)
+                {
+                    bestDistance = dx * dx + dy * dy;
+                    best = c;
+                }
+            }
+        }
+        return best;
+    }
+
+    int runLocalMap(const olam::World &world, std::string_view kind, const std::string &pngPath, std::optional<olam::LocalCoord> crop)
+    {
+        using namespace olam;
+        const SettlementConfig config;
+        const auto site = pickSite(world, config, kind);
+        if (!site)
+        {
+            std::fprintf(stderr, "no site found for '%s'\n", std::string(kind).c_str());
+            return 1;
+        }
+        for (const std::string &warning : siteWarnings(world, *site, config))
+            logging::warn(LogCategory::WorldGen, "Site warning: {}", warning);
+
+        const auto start = std::chrono::steady_clock::now();
+        const LocalMapResult result = generateLocalMap(world, *site, config);
+        if (!result.map)
+        {
+            logging::error(LogCategory::WorldGen, "Local map at ({}, {}): {}", site->x, site->y, result.error);
+            return 1;
+        }
+        const SettlementMap &map = *result.map;
+        logging::info(LogCategory::WorldGen, "Local map at ({}, {}) {} x {} generated in {:.0f} ms, hash 0x{:016X}", site->x,
+                      site->y, map.width(), map.height(), millisecondsSince(start), hashSettlementMap(map));
+
+        std::size_t water[static_cast<std::size_t>(LocalWater::Count)] = {};
+        std::size_t resources[static_cast<std::size_t>(LocalResource::Count)] = {};
+        for (std::size_t i = 0; i < map.tileCount(); ++i)
+        {
+            ++water[static_cast<std::size_t>(map.terrain().water[i])];
+            ++resources[static_cast<std::size_t>(map.terrain().resource[i])];
+        }
+        std::string line = std::format("  trees {}  water:", map.trees().size());
+        for (std::size_t w = 1; w < static_cast<std::size_t>(LocalWater::Count); ++w)
+            line += std::format(" {} {:.1f}%", toString(static_cast<LocalWater>(w)),
+                                100.0 * static_cast<double>(water[w]) / static_cast<double>(map.tileCount()));
+        line += "  resources:";
+        for (std::size_t r = 1; r < static_cast<std::size_t>(LocalResource::Count); ++r)
+        {
+            if (resources[r] > 0)
+                line += std::format(" {} {}", toString(static_cast<LocalResource>(r)), resources[r]);
+        }
+        logging::info(LogCategory::WorldGen, "{}", line);
+
+        if (!pngPath.empty())
+        {
+            std::vector<std::uint8_t> rgba(map.tileCount() * 4);
+            colorizeLocalView(map, LocalView::Terrain, true, rgba);
+            // Whole map at 1:4, or a 768 x 768 crop at full resolution.
+            const int step = crop ? 1 : 4;
+            const int w = map.width() / 4;
+            const int h = map.height() / 4;
+            const int left = crop ? std::clamp(crop->x, 0, map.width() - w) : 0;
+            const int top = crop ? std::clamp(crop->y, 0, map.height() - h) : 0;
+            std::vector<std::uint8_t> rgb(static_cast<std::size_t>(w) * static_cast<std::size_t>(h) * 3);
+            for (int y = 0; y < h; ++y)
+            {
+                for (int x = 0; x < w; ++x)
+                {
+                    const std::size_t source = map.index({left + x * step, top + y * step}) * 4;
+                    const std::size_t target = (static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x)) * 3;
+                    rgb[target] = rgba[source];
+                    rgb[target + 1] = rgba[source + 1];
+                    rgb[target + 2] = rgba[source + 2];
+                }
+            }
+            if (!tools::writePng(pngPath, w, h, rgb))
+                logging::error(LogCategory::Core, "Could not write '{}'", pngPath);
+        }
+        return 0;
+    }
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -152,6 +303,8 @@ int main(int argc, char *argv[])
     WorldConfig config;
     std::string savePath;
     std::string pngPath;
+    std::string localSite;
+    std::optional<LocalCoord> localCrop;
     int surveyCount = 0;
     for (int i = 1; i < argc; ++i)
     {
@@ -186,10 +339,30 @@ int main(int argc, char *argv[])
         {
             pngPath = argv[++i];
         }
+        else if (arg == "--local" && hasValue)
+        {
+            localSite = argv[++i];
+        }
+        else if (arg == "--local-crop" && hasValue)
+        {
+            const std::string_view value = argv[++i];
+            const std::size_t comma = value.find(',');
+            LocalCoord c;
+            if (comma == std::string_view::npos ||
+                std::from_chars(value.data(), value.data() + comma, c.x).ec != std::errc{} ||
+                std::from_chars(value.data() + comma + 1, value.data() + value.size(), c.y).ec != std::errc{})
+            {
+                std::fprintf(stderr, "invalid --local-crop, expected <x>,<y>\n");
+                return 2;
+            }
+            localCrop = c;
+        }
         else
         {
             std::fprintf(stderr, "usage: olam_generate [--seed <n|text>] [--size <W>x<H>] [--save <file>] [--png <file>] "
-                                 "[--landmass-survey <count> (--png = file prefix)]\n");
+                                 "[--landmass-survey <count> (--png = file prefix)] "
+                                 "[--local <x,y | river|coast|lake|forest|plain|mountain|dry> (--png = local map 1:4) "
+                                 "[--local-crop <x>,<y> (768 x 768 at full resolution)]]\n");
             return 2;
         }
     }
@@ -208,6 +381,8 @@ int main(int argc, char *argv[])
     if (!result.ok())
         return 1;
     logging::info(LogCategory::WorldGen, "World hash 0x{:016X}", hashWorld(*result.world).combined);
+    if (!localSite.empty())
+        return runLocalMap(*result.world, localSite, pngPath, localCrop);
     if (!pngPath.empty() && !writeOverviewPng(*result.world, pngPath, std::max(1, config.width / 512)))
         logging::error(LogCategory::Core, "Could not write '{}'", pngPath);
 
