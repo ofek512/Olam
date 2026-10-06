@@ -35,6 +35,11 @@ namespace olam
                 return Key::I;
             case SDL_SCANCODE_L:
                 return Key::L;
+            case SDL_SCANCODE_M:
+                return Key::M;
+            case SDL_SCANCODE_RETURN:
+            case SDL_SCANCODE_KP_ENTER:
+                return Key::Enter;
             case SDL_SCANCODE_TAB:
                 return Key::Tab;
             case SDL_SCANCODE_LCTRL:

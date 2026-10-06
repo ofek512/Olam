@@ -47,10 +47,27 @@ Short status checklist. Full vision and rationale: [agent.MD](../agent.MD).
 - [x] 3.5C Watersheds / drainage basins
 - [x] 3.5D River order, width class, navigability
 
-## Phase 4 — Civilization foundations (= Milestone 2)
+## Phase 4 — First playable settlement
 
-- [ ] 4A Regions
-- [ ] 4B Settlement suitability
-- [ ] 4C Settlement placement
-- [ ] 4D Roads
-- [ ] 4E Initial factions / political seeds
+- [x] 4A World → local map (`olam_settlement`; Enter founds a settlement, M returns to the world map)
+- [ ] 4B First buildings
+- [ ] 4C First population
+- [ ] 4D First economy
+- [ ] 4E Immigration and growth
+- [ ] 4F Standard of living V0
+
+## Phase 5 — Deepen local gameplay
+
+- [ ] 5A Population structure
+
+## Phase 6 — Civilization foundations (= Milestone 2)
+
+- [ ] 6A Regions
+- [ ] 6B Settlement suitability
+- [ ] 6C Generated settlements
+
+## Later phases
+
+- Phase 7 — Roads and trade
+- Phase 8 — City states and kingdoms
+- Phase 9 — Diplomacy and war

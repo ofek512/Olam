@@ -137,9 +137,10 @@ target_link_libraries(olam_settlement
     PRIVATE olam_warnings
 )
 
-# Colouring of local maps (no SDL): shared by the viewer and headless PNG output.
+# Colouring and inspection of local maps (no SDL): shared by the viewer and headless PNG output.
 add_library(olam_settlement_views STATIC
     src/tools/settlement_viewer/LocalViews.cpp
+    src/tools/settlement_viewer/LocalTileInspector.cpp
 )
 target_link_libraries(olam_settlement_views
     PUBLIC olam_settlement
@@ -176,12 +177,20 @@ if(OLAM_BUILD_ENGINE)
         PRIVATE olam_warnings
     )
 
+    add_library(olam_settlement_viewer STATIC
+        src/tools/settlement_viewer/SettlementDebugRenderer.cpp
+    )
+    target_link_libraries(olam_settlement_viewer
+        PUBLIC olam_engine olam_settlement_views
+        PRIVATE olam_warnings
+    )
+
     add_executable(Olam
         src/app/main.cpp
         src/app/Application.cpp
         src/app/CommandLine.cpp
     )
-    target_link_libraries(Olam PRIVATE olam_world_viewer olam_worldgen olam_warnings)
+    target_link_libraries(Olam PRIVATE olam_world_viewer olam_settlement_viewer olam_worldgen olam_warnings)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Olam)
 endif()
 

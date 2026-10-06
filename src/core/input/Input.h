@@ -22,6 +22,8 @@ namespace olam
         H,
         I,
         L,
+        M,
+        Enter,
         Tab,
         LeftCtrl,
         RightCtrl,

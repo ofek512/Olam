@@ -7,7 +7,8 @@ Prefer causal relationships (mountains -> rain shadow -> dry interior; river val
 over independent random layers. Lite plate tectonics only; no ocean currents, long erosion or glaciation in V0.1.
 
 Phase 3 (= Milestone 1, "what natural world exists?") ends at resources plus complete debug tooling.
-Regions, settlement suitability, settlements, roads and factions belong to Phase 4.
+Local settlement maps derived from the world are Phase 4A (see [Local maps](#local-maps-phase-4a)); regions,
+settlement suitability, generated settlements, roads and factions belong to Phase 6+.
 
 ## Pipeline
 
@@ -242,6 +243,43 @@ other intermediate layers.
 - Budget: a 2048² world (all passes) should generate in about 3 s in a Release build. Measured with
   `olam_generate --seed 7 --size 2048x2048`: ~2.5 s (MSVC Release). Per-tile noise uses `noise::FractalSampler`,
   which caches lattice corners per octave (bit-identical to `fbm` / `ridged`).
+
+## Local maps (Phase 4A)
+
+`generateLocalMap(world, site, config)` (`src/settlement`) turns one world tile and its surroundings into a
+3072 x 3072 map of 2 m tiles. It reads the finished `World` only. All noise is a function of absolute position on
+the global local grid, seeded from `deriveSeed(worldSeed, "LOCALMAP")`, so neighbouring maps match where they
+overlap. Passes, in order:
+
+1. **Terrain**: continuous world fields (height, temperature, aridity, fertility, tree cover, roughness, stone,
+   clay) are Catmull-Rom interpolated between world tile centres (separable, once per row). Detail noise scaled by
+   world roughness, plus ridges in steep country (`1 - |fbm|`, rotated domain and non-integer lacunarity so
+   crests do not lock onto the noise lattice). Coastlines are the zero crossing of the interpolated land/water
+   field sampled at a domain-warped position (so bays do not keep world tile outlines), roughened by noise;
+   shores ramp up smoothly from the water. Categorical data (biome, soil) comes from the nearest world tile at a
+   warped position, giving organic borders. Low-frequency noise (warps, ridges) is sampled on a global lattice
+   every 8 tiles and interpolated bilinearly, which is identical for all maps and much cheaper.
+2. **Rivers and creeks**: every world channel tile with discharge >= 1 m³/s (`creekMinDischarge`) gets a
+   Catmull-Rom centreline through world tile centres along the world flow direction, with valley-scale wander
+   and bends whose wavelength is ~14x the channel width (offsets fade out at confluences so tributaries meet).
+   Width: `riverWidthMeters(Q)` for rivers, 2-6 m for creeks, never narrower than 1.5 tiles. Stamping is
+   order-independent (max water class, min height, max bank strength): channels are carved below the surface and
+   valley walls rise at 6 % in lowlands up to 50 % in mountains.
+3. **Ground**: snow (cold, noisy snow line), rock (steep), beach sand, desert sand/gravel, mud (wetlands, flat
+   wet banks), otherwise grass (dirt when sparse); riparian strips stay green in dry country. Ground cover and
+   fertility follow world moisture and fertility, slope and river banks; flat banks get alluvial soil.
+4. **Resources**: ore outcrop patches around each world deposit tile (count and size by richness), stone
+   outcrops (more where `localMaterialsAt` reports stone, and on all rock), clay pits on flat clay-rich ground and
+   near rivers.
+5. **Trees**: individual trees placed by `coordinateHash` with density from world tree cover in noise groves
+   (sparse cover -> copses, dense cover -> closed forest with clearings), extra trees along rivers; at most ~500
+   trees/ha.
+
+Budget: <= 5 s in Release (measured 3-4.5 s). `olam_generate --local <x,y | river|coast|lake|forest|plain|
+mountain|dry> --png file` picks a matching site nearest the world centre and writes the Terrain view at 1:4
+(`--local-crop x,y`: a 768² crop at full resolution). Viewer: Enter founds a settlement on the pinned (else
+hovered) world tile, M switches between the world and the local map, F1-F6 local views (Terrain, Elevation,
+Water, Soil, Fertility, Resources).
 
 ## Debug viewer
 

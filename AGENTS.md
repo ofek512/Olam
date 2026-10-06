@@ -41,6 +41,8 @@ Lower layers never include headers from higher layers.
 - `olam_world`: world data model. `olam_worldgen`: generation pipeline.
 - `olam_engine`: SDL platform, renderer, textures, debug text panels.
 - `olam_world_viewer`: world debug renderer, tile inspector. `Olam` (`src/app`): thin executable.
+- `olam_settlement` (depends on `olam_world` only, no SDL, no worldgen): local settlement maps.
+  `olam_settlement_views` (no SDL): local colouring + inspector. `olam_settlement_viewer` (SDL): local renderer.
 
 ## Build & test (Windows, MSVC)
 
@@ -50,6 +52,9 @@ cmake --build build --config Debug
 ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\Olam.exe --seed 12345 --size 1024x512
 .\build\Debug\Olam.exe --load saves\12345.olamworld   # Ctrl+S saves, Ctrl+L reloads
+# Enter founds a settlement on the pinned/hovered tile (local map), M switches world <-> local map
+.\build\Release\olam_generate.exe --seed 12345 --size 2048x2048 --local river --png build\local.png
+# --local <x,y | river|coast|lake|forest|plain|mountain|dry>, --local-crop <x>,<y> for a full-res 768^2 crop
 ```
 
 Headless (no SDL, as in Linux CI): `cmake -S . -B build-headless -DOLAM_BUILD_ENGINE=OFF`.
