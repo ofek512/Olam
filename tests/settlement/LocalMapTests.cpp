@@ -193,6 +193,34 @@ OLAM_TEST(local_map_layers_are_valid)
                        (understory.y[u - 1] == understory.y[u] && understory.x[u - 1] < understory.x[u]));
         OLAM_CHECK(map->understoryAt({understory.x[u], understory.y[u]}) == u);
     }
+
+    // Forage: row-major, never on a tree or understory tile, on water only as reeds in a marsh.
+    const ForageData &forage = map->forage();
+    OLAM_CHECK(forage.kind.size() == forage.size() && forage.quantity.size() == forage.size());
+    for (std::size_t f = 0; f < forage.size(); ++f)
+    {
+        const LocalCoord c{forage.x[f], forage.y[f]};
+        const std::size_t i = map->index(c);
+        OLAM_CHECK(forage.kind[f] < ForageKind::Count && forage.quantity[f] > 0);
+        OLAM_CHECK(!terrain.treeId[i].isValid() && !map->understoryAt(c));
+        OLAM_CHECK(terrain.water[i] == LocalWater::None ||
+                   (terrain.water[i] == LocalWater::Marsh && forage.kind[f] == ForageKind::Reeds));
+        if (f > 0)
+            OLAM_CHECK(forage.y[f - 1] < forage.y[f] || (forage.y[f - 1] == forage.y[f] && forage.x[f - 1] < forage.x[f]));
+        OLAM_CHECK(map->forageAt(c) == f);
+    }
+
+    // Springs rise in a small pool of fresh water.
+    for (std::size_t s = 0; s < map->springs().size(); ++s)
+    {
+        const LocalSpring &spring = map->springs()[s];
+        OLAM_CHECK(isFreshWater(terrain.water[map->index({spring.x, spring.y})]));
+        if (s > 0)
+        {
+            const LocalSpring &previous = map->springs()[s - 1];
+            OLAM_CHECK(previous.y < spring.y || (previous.y == spring.y && previous.x <= spring.x));
+        }
+    }
 }
 
 OLAM_TEST(local_maps_of_neighbouring_sites_are_seamless)
@@ -233,10 +261,29 @@ OLAM_TEST(local_maps_of_neighbouring_sites_are_seamless)
             const auto ub = b->understoryAt({x - shift, y});
             const bool sameUnderstory = ua.has_value() == ub.has_value() &&
                                         (!ua || a->understory().kind[*ua] == b->understory().kind[*ub]);
-            differences += same && sameUnderstory ? 0u : 1u;
+            const auto fa = a->forageAt({x, y});
+            const auto fb = b->forageAt({x - shift, y});
+            const bool sameForage = fa.has_value() == fb.has_value() &&
+                                    (!fa || (a->forage().kind[*fa] == b->forage().kind[*fb] &&
+                                             a->forage().quantity[*fa] == b->forage().quantity[*fb]));
+            differences += same && sameUnderstory && sameForage ? 0u : 1u;
         }
     }
     OLAM_CHECK(differences == 0);
+
+    // Springs in the overlap are the same in both maps.
+    const auto overlapSprings = [&](const SettlementMap &map, int offset)
+    {
+        std::vector<std::pair<int, int>> out;
+        for (const LocalSpring &spring : map.springs())
+        {
+            const int x = spring.x + offset;
+            if (x >= shift && x < a->width())
+                out.emplace_back(x, spring.y);
+        }
+        return out;
+    };
+    OLAM_CHECK(overlapSprings(*a, 0) == overlapSprings(*b, shift));
 }
 
 OLAM_TEST(local_rivers_follow_world_rivers)
@@ -365,7 +412,11 @@ OLAM_TEST(local_trees_and_understory_follow_ecology)
                 continue;
             const LocalTerrainData &terrain = map->terrain();
             const auto running = [&](std::size_t i)
-            { return terrain.water[i] == LocalWater::River || terrain.water[i] == LocalWater::Creek; };
+            {
+                const LocalWater water = terrain.water[i];
+                return water == LocalWater::River || water == LocalWater::Creek || water == LocalWater::Brook ||
+                       water == LocalWater::Seasonal;
+            };
             const auto toWater = distanceTo(*map, running);
             const auto toTree = distanceTo(*map, [&](std::size_t i)
                                            { return terrain.treeId[i].isValid(); });
@@ -502,6 +553,191 @@ OLAM_TEST(local_forests_have_structure)
         }
     }
     OLAM_CHECK(mixedFound);
+}
+
+OLAM_TEST(local_small_water_features_are_plausible)
+{
+    const World &world = testWorld();
+    const SettlementConfig config = smallConfig();
+    std::size_t brookTiles = 0;
+    std::size_t marshTiles = 0;
+    std::size_t steepMarsh = 0;
+    std::size_t springs = 0;
+    std::size_t components = 0;
+    std::size_t strandedComponents = 0;
+    for (int sy = 16; sy < world.height() - 16; sy += 37)
+    {
+        for (int sx = 16; sx < world.width() - 16; sx += 37)
+        {
+            if (siteError(world, {sx, sy}, config))
+                continue;
+            const auto map = generateLocalMap(world, {sx, sy}, config).map;
+            if (!map)
+                continue;
+            const LocalTerrainData &terrain = map->terrain();
+            const int w = map->width();
+            const int h = map->height();
+            const auto running = [](LocalWater water)
+            {
+                return water == LocalWater::Brook || water == LocalWater::Creek || water == LocalWater::River ||
+                       water == LocalWater::Seasonal;
+            };
+
+            std::vector<bool> spring(map->tileCount(), false);
+            for (const LocalSpring &s : map->springs())
+            {
+                ++springs;
+                spring[map->index({s.x, s.y})] = true;
+                // Springs need a wet enough climate.
+                const int ratio = localTilesPerWorldTile(config, world.config());
+                const WorldCoord tile{(map->origin().x + s.x) / ratio, (map->origin().y + s.y) / ratio};
+                OLAM_CHECK(static_cast<float>(world.climate().moisture[world.index(tile)]) / 255.0f * 2.0f >= 0.5f);
+            }
+
+            // Every stretch of running water continues off the map, reaches standing water or rises at a spring.
+            std::vector<bool> seen(map->tileCount(), false);
+            std::vector<std::size_t> stack;
+            for (std::size_t start = 0; start < map->tileCount(); ++start)
+            {
+                const LocalWater water = terrain.water[start];
+                brookTiles += water == LocalWater::Brook ? 1u : 0u;
+                if (water == LocalWater::Marsh)
+                {
+                    ++marshTiles;
+                    const LocalCoord c = map->coordFromIndex(start);
+                    if (c.x + 1 < w)
+                        steepMarsh += std::abs(map->elevationMeters(start) - map->elevationMeters(start + 1)) > 0.5f ? 1u : 0u;
+                }
+                if (!running(water) || seen[start])
+                    continue;
+                ++components;
+                bool anchored = false;
+                bool onlySeasonal = true;
+                stack.assign(1, start);
+                seen[start] = true;
+                while (!stack.empty())
+                {
+                    const std::size_t i = stack.back();
+                    stack.pop_back();
+                    const LocalCoord c = map->coordFromIndex(i);
+                    onlySeasonal = onlySeasonal && terrain.water[i] == LocalWater::Seasonal;
+                    anchored = anchored || spring[i] || c.x == 0 || c.y == 0 || c.x == w - 1 || c.y == h - 1;
+                    for (int dy = -1; dy <= 1; ++dy)
+                    {
+                        for (int dx = -1; dx <= 1; ++dx)
+                        {
+                            const LocalCoord n{c.x + dx, c.y + dy};
+                            if (!map->isValid(n))
+                                continue;
+                            const std::size_t j = map->index(n);
+                            const LocalWater nw = terrain.water[j];
+                            if (nw == LocalWater::Lake || nw == LocalWater::Ocean || nw == LocalWater::Marsh)
+                                anchored = true;
+                            if (running(nw) && !seen[j])
+                            {
+                                seen[j] = true;
+                                stack.push_back(j);
+                            }
+                        }
+                    }
+                }
+                // Dry-country beds may end in a fan; perennial water may not just stop.
+                strandedComponents += anchored || onlySeasonal ? 0u : 1u;
+            }
+        }
+    }
+    std::printf("  brook tiles %zu  marsh tiles %zu (steep %zu)  springs %zu  running-water stretches %zu (stranded %zu)\n",
+                brookTiles, marshTiles, steepMarsh, springs, components, strandedComponents);
+    OLAM_CHECK(brookTiles > 0 && springs > 0);
+    OLAM_CHECK(strandedComponents * 20 <= components);
+    if (marshTiles > 0)
+        OLAM_CHECK(steepMarsh * 10 <= marshTiles);
+}
+
+OLAM_TEST(local_forage_follows_habitat)
+{
+    const World &world = testWorld();
+    const SettlementConfig config = smallConfig();
+    std::size_t counts[static_cast<std::size_t>(ForageKind::Count)] = {};
+    // Tiles and patches in open grassland (no tree within 6 tiles) and in woodland (a tree within 2).
+    double openTiles = 0.0;
+    double woodTiles = 0.0;
+    double openMushrooms = 0.0;
+    double woodMushrooms = 0.0;
+    double openGreens = 0.0;
+    double woodGreens = 0.0;
+    for (int sy = 16; sy < world.height() - 16; sy += 37)
+    {
+        for (int sx = 16; sx < world.width() - 16; sx += 37)
+        {
+            if (siteError(world, {sx, sy}, config))
+                continue;
+            const auto map = generateLocalMap(world, {sx, sy}, config).map;
+            if (!map)
+                continue;
+            const LocalTerrainData &terrain = map->terrain();
+            const auto toTree = distanceTo(*map, [&](std::size_t i)
+                                           { return terrain.treeId[i].isValid(); });
+            const ForageData &forage = map->forage();
+            for (std::size_t i = 0; i < map->tileCount(); ++i)
+            {
+                if (terrain.water[i] != LocalWater::None || terrain.treeId[i].isValid())
+                    continue;
+                openTiles += toTree[i] > 6 && terrain.ground[i] == LocalGround::Grass ? 1.0 : 0.0;
+                woodTiles += toTree[i] <= 2 ? 1.0 : 0.0;
+            }
+            for (std::size_t f = 0; f < forage.size(); ++f)
+            {
+                const LocalCoord c{forage.x[f], forage.y[f]};
+                const std::size_t i = map->index(c);
+                const ForageKind kind = forage.kind[f];
+                ++counts[static_cast<std::size_t>(kind)];
+                const bool inOpen = toTree[i] > 6 && terrain.ground[i] == LocalGround::Grass;
+                const bool inWood = toTree[i] <= 2;
+                if (kind == ForageKind::Mushrooms)
+                {
+                    openMushrooms += inOpen ? 1.0 : 0.0;
+                    woodMushrooms += inWood ? 1.0 : 0.0;
+                }
+                if (kind == ForageKind::WildGreens)
+                {
+                    openGreens += inOpen ? 1.0 : 0.0;
+                    woodGreens += inWood ? 1.0 : 0.0;
+                }
+                // Within each kind's range (kg), never more than the habitat maximum.
+                constexpr float kMaxKg[] = {8.0f, 3.0f, 5.0f, 1.0f, 250.0f, 40.0f};
+                OLAM_CHECK(forage.kilograms(f) <= kMaxKg[static_cast<std::size_t>(kind)] + 0.05f);
+                if (kind == ForageKind::Mushrooms || kind == ForageKind::Deadwood)
+                    OLAM_CHECK(toTree[i] <= 12);
+                if (kind != ForageKind::Reeds)
+                    OLAM_CHECK(terrain.ground[i] != LocalGround::Rock && terrain.ground[i] != LocalGround::Snow);
+                if (kind == ForageKind::Reeds && terrain.water[i] != LocalWater::Marsh)
+                {
+                    // On a fresh-water shore (skip the map border, whose neighbours lie outside).
+                    if (c.x == 0 || c.y == 0 || c.x == map->width() - 1 || c.y == map->height() - 1)
+                        continue;
+                    bool shore = false;
+                    for (int dy = -1; dy <= 1; ++dy)
+                    {
+                        for (int dx = -1; dx <= 1; ++dx)
+                            shore = shore || isFreshWater(terrain.water[map->index({c.x + dx, c.y + dy})]);
+                    }
+                    OLAM_CHECK(shore);
+                }
+            }
+        }
+    }
+    std::printf("  forage:");
+    for (std::size_t k = 0; k < static_cast<std::size_t>(ForageKind::Count); ++k)
+        std::printf(" %s %zu", std::string(toString(static_cast<ForageKind>(k))).c_str(), counts[k]);
+    std::printf("\n  per 10k tiles: mushrooms open %.1f wood %.1f, greens open %.1f wood %.1f\n", 1e4 * openMushrooms / openTiles,
+                1e4 * woodMushrooms / woodTiles, 1e4 * openGreens / openTiles, 1e4 * woodGreens / woodTiles);
+    for (std::size_t k = 0; k < static_cast<std::size_t>(ForageKind::Count); ++k)
+        OLAM_CHECK(counts[k] > 0);
+    // Woodland offers mushrooms, open grassland greens.
+    OLAM_CHECK(openTiles > 0.0 && woodTiles > 0.0);
+    OLAM_CHECK(woodMushrooms / woodTiles > 5.0 * openMushrooms / openTiles);
+    OLAM_CHECK(openGreens / openTiles > woodGreens / woodTiles);
 }
 
 OLAM_TEST(local_minor_iron_is_small_low_grade_and_geological)

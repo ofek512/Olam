@@ -17,6 +17,12 @@ namespace olam
             return "Lake";
         case LocalWater::Ocean:
             return "Ocean";
+        case LocalWater::Brook:
+            return "Brook";
+        case LocalWater::Marsh:
+            return "Marsh";
+        case LocalWater::Seasonal:
+            return "Seasonal stream bed";
         case LocalWater::Count:
             break;
         }
@@ -139,6 +145,56 @@ namespace olam
             break;
         }
         return "?";
+    }
+
+    std::string_view toString(SpringKind kind)
+    {
+        switch (kind)
+        {
+        case SpringKind::Headwater:
+            return "Headwater spring";
+        case SpringKind::Hillside:
+            return "Hillside spring";
+        case SpringKind::Count:
+            break;
+        }
+        return "?";
+    }
+
+    std::string_view toString(ForageKind kind)
+    {
+        switch (kind)
+        {
+        case ForageKind::Berries:
+            return "Berries";
+        case ForageKind::Mushrooms:
+            return "Mushrooms";
+        case ForageKind::WildGreens:
+            return "Wild greens";
+        case ForageKind::Herbs:
+            return "Wild herbs";
+        case ForageKind::Deadwood:
+            return "Deadwood";
+        case ForageKind::Reeds:
+            return "Reeds";
+        case ForageKind::Count:
+            break;
+        }
+        return "?";
+    }
+
+    const ForageInfo &forageInfo(ForageKind kind)
+    {
+        // Rough real-world values; yields will be balanced against consumption later.
+        static constexpr ForageInfo kInfo[static_cast<std::size_t>(ForageKind::Count)] = {
+            {true, true, 1.0f, 500.0f},  // Berries: one crop a year
+            {true, true, 1.0f, 300.0f},  // Mushrooms: several flushes, capped at the patch
+            {true, true, 1.0f, 250.0f},  // Wild greens
+            {false, true, 1.0f, 0.0f},   // Herbs: seasoning and remedies
+            {false, false, 0.05f, 0.0f}, // Deadwood: finite, slowly replenished by the forest
+            {false, true, 1.0f, 0.0f},   // Reeds: thatch, baskets, mats
+        };
+        return kInfo[static_cast<std::size_t>(kind)];
     }
 
 } // namespace olam

@@ -3,6 +3,7 @@
 #include "core/debug/Assert.h"
 #include "core/math/MathUtil.h"
 #include "core/random/CoordinateHash.h"
+#include "settlement/ResourceState.h"
 #include "settlement/SettlementMap.h"
 #include "tools/settlement_viewer/LocalViews.h"
 
@@ -333,6 +334,26 @@ namespace olam
             putRgb(atlas, rect, x, y, v, v, v);
         }
 
+        // Turns the sprite's grey pixels into shades of one colour (for sprites drawn with their own colours).
+        void recolourGrey(LocalSpriteAtlas &atlas, const SpriteRect &rect, std::uint8_t r, std::uint8_t g, std::uint8_t b)
+        {
+            for (int y = 0; y < rect.h; ++y)
+            {
+                for (int x = 0; x < rect.w; ++x)
+                {
+                    const std::size_t a = (static_cast<std::size_t>(rect.y + y) * static_cast<std::size_t>(atlas.width) +
+                                           static_cast<std::size_t>(rect.x + x)) *
+                                          4;
+                    if (atlas.rgba[a + 3] == 0 || atlas.rgba[a] != atlas.rgba[a + 1] || atlas.rgba[a + 1] != atlas.rgba[a + 2])
+                        continue;
+                    const float v = static_cast<float>(atlas.rgba[a]) / 255.0f;
+                    atlas.rgba[a] = static_cast<std::uint8_t>(static_cast<float>(r) * v);
+                    atlas.rgba[a + 1] = static_cast<std::uint8_t>(static_cast<float>(g) * v);
+                    atlas.rgba[a + 2] = static_cast<std::uint8_t>(static_cast<float>(b) * v);
+                }
+            }
+        }
+
         // Grass blades / stems growing up from the lower part of the sprite.
         void drawBlades(LocalSpriteAtlas &atlas, const SpriteRect &rect, std::uint64_t seed, int count, int minHeight, int maxHeight,
                         float spread)
@@ -434,19 +455,7 @@ namespace olam
                            static_cast<std::uint8_t>(petal[2] * 4 / 5));
                 }
                 // Leaves under the petals are green, since the sprite is not tinted.
-                for (std::size_t p = 0; p < static_cast<std::size_t>(rect.w * rect.h); ++p)
-                {
-                    const std::size_t a = (static_cast<std::size_t>(rect.y) + p / static_cast<std::size_t>(rect.w)) *
-                                              static_cast<std::size_t>(atlas.width) * 4 +
-                                          (static_cast<std::size_t>(rect.x) + p % static_cast<std::size_t>(rect.w)) * 4;
-                    if (atlas.rgba[a + 3] != 0 && atlas.rgba[a] == atlas.rgba[a + 1] && atlas.rgba[a + 1] == atlas.rgba[a + 2])
-                    {
-                        const float v = static_cast<float>(atlas.rgba[a]) / 255.0f;
-                        atlas.rgba[a] = static_cast<std::uint8_t>(110.0f * v);
-                        atlas.rgba[a + 1] = static_cast<std::uint8_t>(165.0f * v);
-                        atlas.rgba[a + 2] = static_cast<std::uint8_t>(80.0f * v);
-                    }
-                }
+                recolourGrey(atlas, rect, 110, 165, 80);
                 break;
             }
             case UnderstoryKind::Fern:
@@ -462,6 +471,127 @@ namespace olam
                 drawRock(atlas, rect, variant);
                 break;
             case UnderstoryKind::Count:
+                break;
+            }
+        }
+
+        // Forage sprites carry their own colours (drawn with a white tint), so the fruit stands out.
+        void drawForage(LocalSpriteAtlas &atlas, const SpriteRect &rect, ForageKind kind, int variant)
+        {
+            const std::uint64_t seed = coordinateHash(kArtSeed + 31 + static_cast<std::uint64_t>(kind), rect.w, variant);
+            switch (kind)
+            {
+            case ForageKind::Berries:
+            {
+                drawLobed(atlas, rect, seed, 0.85f, 0.2f, 6.0f, 2.0f);
+                recolourGrey(atlas, rect, 70, 130, 60);
+                // Red or dark blue berries in small clusters.
+                const std::uint8_t berry[2][3] = {{205, 40, 50}, {60, 55, 140}};
+                for (int k = 0; k < 9; ++k)
+                {
+                    const std::uint64_t h = coordinateHash(seed, k, 5);
+                    const int bx = 3 + static_cast<int>(unit(h, 0) * static_cast<float>(rect.w - 6));
+                    const int by = 3 + static_cast<int>(unit(h, 16) * static_cast<float>(rect.h - 6));
+                    putRgb(atlas, rect, bx, by, berry[variant][0], berry[variant][1], berry[variant][2]);
+                    if (k % 3 == 0)
+                        putRgb(atlas, rect, bx + 1, by, berry[variant][0], berry[variant][1], berry[variant][2]);
+                }
+                break;
+            }
+            case ForageKind::Mushrooms:
+            {
+                // Three or four caps with stems; brown or pale.
+                const std::uint8_t cap[2][3] = {{150, 95, 55}, {225, 215, 190}};
+                const int count = 3 + variant;
+                for (int k = 0; k < count; ++k)
+                {
+                    const std::uint64_t h = coordinateHash(seed, k, 9);
+                    const int cx = 3 + static_cast<int>(unit(h, 0) * static_cast<float>(rect.w - 6));
+                    const int cy = 5 + static_cast<int>(unit(h, 16) * static_cast<float>(rect.h - 9));
+                    putRgb(atlas, rect, cx, cy + 1, 235, 228, 210);
+                    putRgb(atlas, rect, cx, cy + 2, 215, 205, 185);
+                    for (int dx = -2; dx <= 2; ++dx)
+                    {
+                        const float shade = dx < 0 ? 1.0f : dx == 2 ? 0.7f
+                                                                    : 0.85f;
+                        putRgb(atlas, rect, cx + dx, cy, static_cast<std::uint8_t>(cap[variant][0] * shade),
+                               static_cast<std::uint8_t>(cap[variant][1] * shade), static_cast<std::uint8_t>(cap[variant][2] * shade));
+                    }
+                    for (int dx = -1; dx <= 1; ++dx)
+                        putRgb(atlas, rect, cx + dx, cy - 1, cap[variant][0], cap[variant][1], cap[variant][2]);
+                }
+                break;
+            }
+            case ForageKind::WildGreens:
+            {
+                // Rosette of broad leaves.
+                const float centre = static_cast<float>(rect.w) * 0.5f;
+                const int leaves = 6 + variant;
+                for (int l = 0; l < leaves; ++l)
+                {
+                    const float angle = (static_cast<float>(l) + 0.4f * unit(coordinateHash(seed, l, 1), 0)) * 6.2831853f /
+                                        static_cast<float>(leaves);
+                    for (int s = 0; s <= 5; ++s)
+                    {
+                        const float px = centre + std::cos(angle) * static_cast<float>(s);
+                        const float py = centre + std::sin(angle) * static_cast<float>(s);
+                        const float value = 0.65f + 0.07f * static_cast<float>(s);
+                        putGrey(atlas, rect, static_cast<int>(px), static_cast<int>(py), value);
+                        if (s >= 2 && s <= 4)
+                            putGrey(atlas, rect, static_cast<int>(px - std::sin(angle)), static_cast<int>(py + std::cos(angle)), value - 0.1f);
+                    }
+                }
+                recolourGrey(atlas, rect, 120, 200, 85);
+                break;
+            }
+            case ForageKind::Herbs:
+            {
+                drawBlades(atlas, rect, seed, 7, 4, 7, 0.6f);
+                recolourGrey(atlas, rect, 105, 150, 95);
+                const std::uint8_t bloom[2][3] = {{185, 150, 220}, {245, 245, 245}};
+                for (int k = 0; k < 6; ++k)
+                {
+                    const std::uint64_t h = coordinateHash(seed, k, 13);
+                    putRgb(atlas, rect, 3 + static_cast<int>(unit(h, 0) * static_cast<float>(rect.w - 6)),
+                           4 + static_cast<int>(unit(h, 16) * static_cast<float>(rect.h - 10)), bloom[variant][0], bloom[variant][1],
+                           bloom[variant][2]);
+                }
+                break;
+            }
+            case ForageKind::Deadwood:
+            {
+                // A pile of crossed branches.
+                for (int k = 0; k < 4 + variant; ++k)
+                {
+                    const std::uint64_t h = coordinateHash(seed, k, 17);
+                    const float y0 = 3.0f + unit(h, 0) * static_cast<float>(rect.h - 6);
+                    const float y1 = 3.0f + unit(h, 16) * static_cast<float>(rect.h - 6);
+                    for (int x = 2; x < rect.w - 2; ++x)
+                    {
+                        const float t = static_cast<float>(x - 2) / static_cast<float>(rect.w - 5);
+                        const int y = static_cast<int>(lerp(y0, y1, t));
+                        putRgb(atlas, rect, x, y, 135, 105, 75);
+                        putRgb(atlas, rect, x, y + 1, 95, 72, 52);
+                    }
+                }
+                break;
+            }
+            case ForageKind::Reeds:
+            {
+                drawBlades(atlas, rect, seed, 14 + 2 * variant, 12, 20, 0.7f);
+                recolourGrey(atlas, rect, 150, 175, 95);
+                // Brown seed heads on the tallest stems.
+                for (int k = 0; k < 4; ++k)
+                {
+                    const std::uint64_t h = coordinateHash(seed, k, 23);
+                    const int hx = 3 + static_cast<int>(unit(h, 0) * static_cast<float>(rect.w - 6));
+                    const int hy = 2 + static_cast<int>(unit(h, 16) * 4.0f);
+                    for (int dy = 0; dy < 3; ++dy)
+                        putRgb(atlas, rect, hx, hy + dy, 125, 85, 50);
+                }
+                break;
+            }
+            case ForageKind::Count:
                 break;
             }
         }
@@ -623,6 +753,29 @@ namespace olam
                 return s;
             }
 
+            // Forage patch `f`, centred on its tile with a little jitter; own colours (white tint).
+            LocalSpriteInstance forage(std::size_t f, float alpha) const
+            {
+                const ForageData &data = map.forage();
+                const int x = data.x[f];
+                const int y = data.y[f];
+                const std::uint64_t h = hashAt(x, y) ^ 0xC2B2AE3D27D4EB4Full;
+                const int variant = static_cast<int>((h >> 32) % kForageVariants);
+                const int sprite = forageSprite(data.kind[f], variant);
+                const SpriteRect size = spritePixelSize(sprite);
+                const float w = static_cast<float>(size.w) / static_cast<float>(kSpritePixelsPerTile);
+                const float hgt = static_cast<float>(size.h) / static_cast<float>(kSpritePixelsPerTile);
+                LocalSpriteInstance s;
+                s.sprite = static_cast<std::uint16_t>(sprite);
+                s.mirrored = ((h >> 40) & 1u) != 0;
+                s.x = static_cast<float>(x) + 0.5f - 0.5f * w + 0.3f * (unit(h, 0) - 0.5f);
+                s.y = static_cast<float>(y) + 0.5f - 0.5f * hgt + 0.3f * (unit(h, 16) - 0.5f);
+                s.w = w;
+                s.h = hgt;
+                s.a = alpha;
+                return s;
+            }
+
             // Boulder on some stone and ore tiles.
             bool rock(int x, int y, LocalSpriteInstance &s) const
             {
@@ -663,6 +816,15 @@ namespace olam
             return (sprite - kFirstRockSprite) == 2 ? SpriteRect{0, 0, t * 3 / 2, t * 3 / 2} : SpriteRect{0, 0, t, t};
         if (sprite < kFirstUnderstorySprite)
             return {0, 0, t, t};
+        if (sprite >= kFirstForageSprite)
+        {
+            const auto forageKind = static_cast<ForageKind>((sprite - kFirstForageSprite) / kForageVariants);
+            if (forageKind == ForageKind::Deadwood)
+                return {0, 0, t * 3 / 2, t};
+            if (forageKind == ForageKind::Reeds)
+                return {0, 0, t, t * 3 / 2};
+            return {0, 0, t, t};
+        }
         const auto kind = static_cast<UnderstoryKind>((sprite - kFirstUnderstorySprite) / kUnderstoryVariants);
         const int variant = (sprite - kFirstUnderstorySprite) % kUnderstoryVariants;
         switch (kind)
@@ -717,15 +879,18 @@ namespace olam
                 drawGround(atlas, rect, id - kFirstGroundSprite);
             else if (id < kFirstUnderstorySprite)
                 drawWater(atlas, rect, id - kFirstWaterSprite);
-            else
+            else if (id < kFirstForageSprite)
                 drawUnderstory(atlas, rect, static_cast<UnderstoryKind>((id - kFirstUnderstorySprite) / kUnderstoryVariants),
                                (id - kFirstUnderstorySprite) % kUnderstoryVariants);
+            else
+                drawForage(atlas, rect, static_cast<ForageKind>((id - kFirstForageSprite) / kForageVariants),
+                           (id - kFirstForageSprite) % kForageVariants);
         }
         return atlas;
     }
 
     void collectLocalSprites(const SettlementMap &map, const Rect &visible, float zoom, bool hillshade,
-                             std::vector<LocalSpriteInstance> &out)
+                             std::vector<LocalSpriteInstance> &out, const ResourceState *state)
     {
         out.clear();
         const float objectAlpha = smoothstep(kObjectsFromZoom, kObjectsFromZoom * 1.5f, zoom);
@@ -748,7 +913,9 @@ namespace olam
             {
                 for (int x = x0; x < x1; ++x)
                 {
-                    const bool water = map.terrain().water[map.index({x, y})] != LocalWater::None;
+                    const LocalWater waterKind = map.terrain().water[map.index({x, y})];
+                    // Dry stream beds look like ground, not water.
+                    const bool water = waterKind != LocalWater::None && waterKind != LocalWater::Seasonal;
                     const std::uint64_t h = placement.hashAt(x, y);
                     // Compensates the sprites' darker pixels so the mean matches the flat tile colour.
                     const float gain = (water ? 1.1f : 1.03f) / 255.0f;
@@ -790,16 +957,22 @@ namespace olam
         };
         const std::size_t first = rowStart(trees.y, oy0);
         const std::size_t last = rowStart(trees.y, oy1);
+        const bool anyFelled = state && state->felledTreeCount() > 0;
+        const auto felled = [&](std::size_t t)
+        { return anyFelled && state->treeFelled(map, TreeId::fromIndex(t)); };
         const float understoryAlpha = objectAlpha * smoothstep(kUnderstoryFromZoom, kUnderstoryFromZoom * 1.5f, zoom);
         std::size_t u = understoryAlpha > 0.0f ? rowStart(understory.y, oy0) : understory.size();
         const std::size_t uLast = understoryAlpha > 0.0f ? rowStart(understory.y, oy1) : understory.size();
+        const ForageData &forage = map.forage();
+        std::size_t f = understoryAlpha > 0.0f ? rowStart(forage.y, oy0) : forage.size();
+        const std::size_t fLast = understoryAlpha > 0.0f ? rowStart(forage.y, oy1) : forage.size();
 
         if (zoom >= kShadowsFromZoom)
         {
             const float shadowAlpha = 0.28f * smoothstep(kShadowsFromZoom, kShadowsFromZoom * 1.3f, zoom);
             for (std::size_t t = first; t < last; ++t)
             {
-                if (trees.x[t] < ox0 || trees.x[t] >= ox1)
+                if (trees.x[t] < ox0 || trees.x[t] >= ox1 || felled(t))
                     continue;
                 LocalSpriteInstance s = placement.crown(t, true);
                 s.a = shadowAlpha * objectAlpha;
@@ -821,9 +994,14 @@ namespace olam
                 if (understory.x[u] >= ox0 && understory.x[u] < ox1)
                     out.push_back(placement.understory(u, understoryAlpha));
             }
+            for (; f < fLast && forage.y[f] == y; ++f)
+            {
+                if (forage.x[f] >= ox0 && forage.x[f] < ox1 && !(state && state->forageDepleted(map, f)))
+                    out.push_back(placement.forage(f, understoryAlpha));
+            }
             for (; t < last && trees.y[t] == y; ++t)
             {
-                if (trees.x[t] >= ox0 && trees.x[t] < ox1)
+                if (trees.x[t] >= ox0 && trees.x[t] < ox1 && !felled(t))
                     out.push_back(placement.crown(t, false));
             }
         }

@@ -1,5 +1,6 @@
 #include "tools/settlement_viewer/LocalTileInspector.h"
 
+#include "settlement/ResourceState.h"
 #include "settlement/SettlementMap.h"
 
 #include <cmath>
@@ -8,7 +9,38 @@
 namespace olam
 {
 
-    std::vector<std::string> describeLocalTile(const SettlementMap &map, Vec2 mapPosition, bool pinned)
+    namespace
+    {
+
+        void describeForage(const SettlementMap &map, LocalCoord coord, std::vector<std::string> &lines, const ResourceState *state)
+        {
+            const auto f = map.forageAt(coord);
+            if (!f)
+                return;
+            const ForageKind kind = map.forage().kind[*f];
+            const ForageInfo &info = forageInfo(kind);
+            const float maximum = map.forage().kilograms(*f);
+            const float left = state ? state->forageRemaining(map, *f) : maximum;
+            lines.push_back(std::format("Forage: {}   {:.1f} / {:.1f} kg", toString(kind), left, maximum));
+            if (info.renewable)
+                lines.push_back(std::format("  renewable, regrows {:.0f}%/year{}", info.regrowthPerYear * 100.0f,
+                                            info.food ? std::format(", {:.0f} kcal/kg", info.kcalPerKg) : ""));
+            else
+                lines.push_back(std::format("  finite, replenished {:.0f}%/year", info.regrowthPerYear * 100.0f));
+        }
+
+        void describeSpring(const SettlementMap &map, LocalCoord coord, std::vector<std::string> &lines)
+        {
+            for (const LocalSpring &spring : map.springs())
+            {
+                if (spring.x == coord.x && spring.y == coord.y)
+                    lines.push_back(std::string(toString(spring.kind)));
+            }
+        }
+
+    } // namespace
+
+    std::vector<std::string> describeLocalTile(const SettlementMap &map, Vec2 mapPosition, bool pinned, const ResourceState *state)
     {
         const LocalCoord coord{static_cast<std::int32_t>(std::floor(mapPosition.x)),
                                static_cast<std::int32_t>(std::floor(mapPosition.y))};
@@ -30,6 +62,8 @@ namespace olam
         {
             lines.push_back(std::format("Water: {}", toString(terrain.water[i])));
             lines.push_back(std::format("Bed: {}", toString(terrain.ground[i])));
+            describeSpring(map, coord, lines);
+            describeForage(map, coord, lines, state);
             return lines;
         }
         lines.push_back(std::format("Ground: {}   cover {}%", toString(terrain.ground[i]), terrain.groundCover[i] * 100 / 255));
@@ -48,10 +82,18 @@ namespace olam
             break;
         }
         if (const TreeId tree = terrain.treeId[i]; tree.isValid())
-            lines.push_back(std::format("Tree #{}: {}   growth {}%", tree.index(), toString(map.trees().kind[tree.index()]),
-                                        map.trees().growth[tree.index()] * 100 / 255));
+        {
+            const std::size_t t = tree.index();
+            const float wood = treeWoodKg(map.trees().kind[t], map.trees().growth[t]);
+            if (state && state->treeFelled(map, tree))
+                lines.push_back(std::format("Stump of a {} (felled)", toString(map.trees().kind[t])));
+            else
+                lines.push_back(std::format("Tree #{}: {}   growth {}%   wood {:.0f} kg", t, toString(map.trees().kind[t]),
+                                            map.trees().growth[t] * 100 / 255, wood));
+        }
         if (const auto u = map.understoryAt(coord))
             lines.push_back(std::format("Understory: {}", toString(map.understory().kind[*u])));
+        describeForage(map, coord, lines, state);
         return lines;
     }
 

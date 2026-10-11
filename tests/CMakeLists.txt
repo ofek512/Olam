@@ -40,5 +40,6 @@ target_link_libraries(olam_worldgen_tests PRIVATE olam_worldgen)
 olam_add_test_executable(olam_settlement_tests
     settlement/LocalMapTests.cpp
     settlement/LocalViewTests.cpp
+    settlement/ResourceStateTests.cpp
 )
 target_link_libraries(olam_settlement_tests PRIVATE olam_settlement_views olam_worldgen)

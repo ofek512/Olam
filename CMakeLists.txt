@@ -131,6 +131,7 @@ add_library(olam_settlement STATIC
     src/settlement/SettlementMap.cpp
     src/settlement/SiteSelection.cpp
     src/settlement/LocalMapGenerator.cpp
+    src/settlement/ResourceState.cpp
 )
 target_link_libraries(olam_settlement
     PUBLIC olam_world

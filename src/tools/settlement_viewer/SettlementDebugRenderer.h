@@ -12,6 +12,7 @@ namespace olam
 
     class Camera2D;
     class Renderer;
+    class ResourceState;
     class SettlementMap;
 
     // Draws the active view of a settlement map. Every view is one texture (1 texel = 1 local tile), rebuilt only
@@ -26,15 +27,17 @@ namespace olam
         LocalView view() const { return m_view; }
         bool hillshade() const { return m_hillshade; }
 
-        void draw(Renderer &renderer, const Camera2D &camera, const SettlementMap &map);
+        // `state` (optional): felled trees and gathered forage; the texture is rebuilt when its revision changes.
+        void draw(Renderer &renderer, const Camera2D &camera, const SettlementMap &map, const ResourceState *state = nullptr);
 
         // Sprites drawn in the last frame and the time spent building them.
         std::size_t spriteCount() const { return m_batch.quadCount(); }
         double spriteMilliseconds() const { return m_spriteMs; }
 
     private:
-        void rebuild(Renderer &renderer, const SettlementMap &map);
-        void drawSprites(Renderer &renderer, const Camera2D &camera, const SettlementMap &map, const Rect &visible);
+        void rebuild(Renderer &renderer, const SettlementMap &map, const ResourceState *state);
+        void drawSprites(Renderer &renderer, const Camera2D &camera, const SettlementMap &map, const Rect &visible,
+                         const ResourceState *state);
 
         Texture m_texture;
         Texture m_overview;
@@ -43,6 +46,7 @@ namespace olam
         std::vector<LocalSpriteInstance> m_instances;
         SpriteBatch m_batch;
         double m_spriteMs = 0.0;
+        std::uint64_t m_stateRevision = 0;
         LocalView m_view = LocalView::Terrain;
         bool m_hillshade = true;
         bool m_dirty = true;

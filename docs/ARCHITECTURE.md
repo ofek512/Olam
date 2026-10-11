@@ -76,8 +76,17 @@ Tests: one executable per library (`olam_core_tests`, `olam_world_tests`, `olam_
   where they overlap (seamless), and a map can always be regenerated instead of saved (4A does not save maps).
 - Layers are struct-of-arrays like the world: elevation (int16 dm relative to a base), water, ground, soil,
   fertility, ground cover, resource and a per-tile tree index. Trees (position, growth, `TreeKind`) are
-  individual entities in a compact list; understory plants and small objects (`UnderstoryData`) and mineral
-  occurrences are sparse lists without per-tile layers (`SettlementMap::understoryAt` binary-searches).
+  individual entities in a compact list; understory plants and small objects (`UnderstoryData`), forage patches
+  (`ForageData`), springs and mineral occurrences are sparse lists without per-tile layers
+  (`understoryAt` / `forageAt` binary-search). Geological resources (resource layer, minerals) and biological
+  ones (trees, understory, forage) are separate, so one spot can hold a tree, mushrooms and buried iron.
+- Generated data is immutable: forage stores its generated maximum only. Gathering state is `ResourceState`
+  (`olam_settlement`): forage taken (kg) and felled trees, keyed by local tile in ordered containers, with
+  `regrow(years)` and `treeWoodKg(kind, growth)`. Views, sprites and the inspector take it as an optional
+  overlay; the viewer's test harvest (G gather 1 kg or fell a tree, Shift+G all, Y one year) edits it.
+- Persistence: `ResourceState::serialize` / `deserialize` give a versioned binary blob bound to the map's world
+  seed and site (round trip tested). A save needs the world, the settlement site and this blob, since the map
+  itself is regenerated. Writing it into a save file is left to Phase 4B, when settlements get saved.
 - Sites: any land tile far enough from the world edge (`siteError`); harsh sites only produce warnings
   (`siteWarnings`). The app holds one active settlement; founding elsewhere replaces it, a new world drops it.
 - Generation details: [WORLD_GENERATION.md](WORLD_GENERATION.md#local-maps-phase-4a).
@@ -86,13 +95,13 @@ Tests: one executable per library (`olam_core_tests`, `olam_world_tests`, `olam_
 
 One terrain representation, shown differently by zoom (screen px per tile, thresholds in `LocalSprites.h`):
 
-| Zoom   | Look                                                                                         |
-| ------ | -------------------------------------------------------------------------------------------- |
-| < 1    | Natural overview: the view texture box-filtered 4x (`downsampleRgba`), bilinear              |
-| 1 - 10 | View texture, 1 texel = 1 tile, nearest; tree crowns and rocks fade in over 3 - 4.5          |
-| >= 6   | Tree shadows; understory (shrubs, ferns, grass, flowers, rushes, logs, small rocks) fades in |
-| >= 10  | Pixel-art ground: a 16 px pattern per tile tinted by the tile colour, fading in over 10 - 14 |
-| >= 12  | Sprites switch from bilinear to nearest (crisp pixel art, snapped to whole screen pixels)    |
+| Zoom   | Look                                                                                             |
+| ------ | ------------------------------------------------------------------------------------------------ |
+| < 1    | Natural overview: the view texture box-filtered 4x (`downsampleRgba`), bilinear                  |
+| 1 - 10 | View texture, 1 texel = 1 tile, nearest; tree crowns and rocks fade in over 3 - 4.5              |
+| >= 6   | Tree shadows; understory and forage (berries, mushrooms, greens, herbs, deadwood, reeds) fade in |
+| >= 10  | Pixel-art ground: a 16 px pattern per tile tinted by the tile colour, fading in over 10 - 14     |
+| >= 12  | Sprites switch from bilinear to nearest (crisp pixel art, snapped to whole screen pixels)        |
 
 - Base textures are built once per map / view change (never per frame). Object sprites exist only per frame,
   for the visible tiles plus a 4-tile margin (crowns reach beyond their anchor tile); nothing is allocated per

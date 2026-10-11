@@ -49,6 +49,8 @@ namespace olam
         F10,
         F11,
         F12,
+        G,
+        Y,
         Count,
     };
 

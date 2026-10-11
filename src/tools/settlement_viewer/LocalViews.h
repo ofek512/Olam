@@ -11,6 +11,7 @@ namespace olam
 {
 
     class SettlementMap;
+    class ResourceState;
 
     enum class LocalView : std::uint8_t
     {
@@ -20,6 +21,12 @@ namespace olam
         Soil,
         Fertility,
         Resources,
+        // Tree kinds and understory.
+        Vegetation,
+        // Forage patches by kind, dimmed as they are gathered.
+        Forage,
+        // Mineral occurrences (exposed and buried) by source, over stone and clay.
+        Minerals,
         Count,
     };
 
@@ -32,7 +39,9 @@ namespace olam
     const LocalViewInfo &localViewInfo(LocalView view);
 
     // Fills width * height RGBA8 pixels (1 pixel per local tile). No SDL: also used for headless PNG output.
-    void colorizeLocalView(const SettlementMap &map, LocalView view, bool hillshade, std::span<std::uint8_t> rgba);
+    // `state` (optional) hides felled trees and gathered forage.
+    void colorizeLocalView(const SettlementMap &map, LocalView view, bool hillshade, std::span<std::uint8_t> rgba,
+                           const ResourceState *state = nullptr);
 
     struct LocalRgb
     {

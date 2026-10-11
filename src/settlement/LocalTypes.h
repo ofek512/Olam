@@ -26,10 +26,23 @@ namespace olam
         River,
         Lake,
         Ocean,
+        // Headwater stream, about a metre wide.
+        Brook,
+        // Shallow standing water with vegetation.
+        Marsh,
+        // Stream bed that only carries water in the wet season.
+        Seasonal,
         Count,
     };
 
     std::string_view toString(LocalWater water);
+
+    // Fresh water that can be drawn or crossed on foot most of the year (not the sea, not a dry bed).
+    constexpr bool isFreshWater(LocalWater water)
+    {
+        return water == LocalWater::Creek || water == LocalWater::River || water == LocalWater::Lake ||
+               water == LocalWater::Brook || water == LocalWater::Marsh;
+    }
 
     // Surface material of a tile (for water tiles: the bed).
     enum class LocalGround : std::uint8_t
@@ -109,6 +122,44 @@ namespace olam
     };
 
     std::string_view toString(UnderstoryKind kind);
+
+    enum class SpringKind : std::uint8_t
+    {
+        // Source of a headwater brook.
+        Headwater,
+        // Groundwater emerging on a slope, wetting the ground below without a lasting stream.
+        Hillside,
+        Count,
+    };
+
+    std::string_view toString(SpringKind kind);
+
+    // Natural food and materials that can be gathered before farming.
+    enum class ForageKind : std::uint8_t
+    {
+        Berries,
+        Mushrooms,
+        WildGreens,
+        Herbs,
+        Deadwood,
+        Reeds,
+        Count,
+    };
+
+    std::string_view toString(ForageKind kind);
+
+    // Static properties of a forage kind; quantities are kilograms.
+    struct ForageInfo
+    {
+        bool food;
+        bool renewable;
+        // Share of the patch's maximum that grows back per year (renewable kinds; deadwood falls slowly).
+        float regrowthPerYear;
+        // Food energy per kilogram (0 for materials).
+        float kcalPerKg;
+    };
+
+    const ForageInfo &forageInfo(ForageKind kind);
 
     struct TreeTag;
     using TreeId = StrongId<TreeTag>;

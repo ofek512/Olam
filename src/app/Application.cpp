@@ -244,6 +244,9 @@ namespace olam
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 
         m_settlement = std::move(result.map);
+        m_resourceState = ResourceState{};
+        m_gatheredKg = {};
+        m_woodKg = 0.0f;
         m_siteWarnings = siteWarnings(*m_world, *site, m_settlementConfig);
         m_localPinned.reset();
         m_settlementRenderer->setView(m_localView, m_localHillshade);
@@ -317,6 +320,44 @@ namespace olam
                 m_localPinned = LocalCoord{static_cast<std::int32_t>(std::floor(mouseMap.x)),
                                            static_cast<std::int32_t>(std::floor(mouseMap.y))};
         }
+
+        if (m_input.wasPressed(Key::G))
+            testHarvest(shift);
+        if (m_input.wasPressed(Key::Y))
+        {
+            m_resourceState.regrow(*m_settlement, 1.0f);
+            setStatus(std::format("One year passed: forage regrew ({} patches still short)", m_resourceState.changedForageCount()));
+        }
+    }
+
+    void Application::testHarvest(bool all)
+    {
+        std::optional<LocalCoord> tile = m_localPinned;
+        const Vec2 mouseMap = m_localCamera.screenToWorld(m_input.mousePosition());
+        if (!tile && contains(*m_settlement, mouseMap))
+            tile = LocalCoord{static_cast<std::int32_t>(std::floor(mouseMap.x)), static_cast<std::int32_t>(std::floor(mouseMap.y))};
+        if (!tile)
+            return;
+
+        if (const auto f = m_settlement->forageAt(*tile); f && !m_resourceState.forageDepleted(*m_settlement, *f))
+        {
+            const ForageKind kind = m_settlement->forage().kind[*f];
+            const float taken = m_resourceState.harvestForage(*m_settlement, *f, all ? 1.0e9f : 1.0f);
+            m_gatheredKg[static_cast<std::size_t>(kind)] += taken;
+            setStatus(std::format("Gathered {:.1f} kg {} at ({}, {}), {:.1f} kg left", taken, toString(kind), tile->x, tile->y,
+                                  m_resourceState.forageRemaining(*m_settlement, *f)));
+            return;
+        }
+        if (const TreeId tree = m_settlement->terrain().treeId[m_settlement->index(*tile)];
+            tree.isValid() && !m_resourceState.treeFelled(*m_settlement, tree))
+        {
+            const float wood = m_resourceState.fellTree(*m_settlement, tree);
+            m_woodKg += wood;
+            setStatus(std::format("Felled a {} at ({}, {}): {:.0f} kg wood", toString(m_settlement->trees().kind[tree.index()]),
+                                  tile->x, tile->y, wood));
+            return;
+        }
+        setStatus(std::format("Nothing to gather at ({}, {})", tile->x, tile->y));
     }
 
     void Application::processWorldInput()
@@ -436,7 +477,7 @@ namespace olam
 
         if (m_mode == Mode::Local)
         {
-            m_settlementRenderer->draw(*m_renderer, m_localCamera, *m_settlement);
+            m_settlementRenderer->draw(*m_renderer, m_localCamera, *m_settlement, &m_resourceState);
             const Vec2 mouseMap = m_localCamera.screenToWorld(m_input.mousePosition());
             if (contains(*m_settlement, mouseMap) && m_localCamera.zoom() >= kTileHighlightMinZoom)
             {
@@ -544,12 +585,23 @@ namespace olam
             std::format("Sprites {}   built in {:.2f} ms", m_settlementRenderer->spriteCount(),
                         m_settlementRenderer->spriteMilliseconds()),
         };
+        if (m_woodKg > 0.0f || m_resourceState.changedForageCount() > 0)
+        {
+            std::string gathered = std::format("Gathered: wood {:.0f} kg ({} trees)", m_woodKg, m_resourceState.felledTreeCount());
+            for (std::size_t k = 0; k < m_gatheredKg.size(); ++k)
+            {
+                if (m_gatheredKg[k] > 0.0f)
+                    gathered += std::format("  {} {:.1f} kg", toString(static_cast<ForageKind>(k)), m_gatheredKg[k]);
+            }
+            lines.push_back(gathered);
+        }
         for (const std::string &warning : m_siteWarnings)
             lines.push_back("! " + warning);
         lines.insert(lines.end(), {
                                       "",
                                       "WASD/Arrows move  Shift fast  Wheel zoom  MMB drag",
-                                      "Tab/F1-F6 views  H shade  LMB pin tile",
+                                      "Tab/F1-F9 views  H shade  LMB pin tile",
+                                      "G gather 1 kg / fell tree  Shift+G gather all  Y one year",
                                       "M world map  ` overlay  Esc quit",
                                   });
         if (m_statusSeconds > 0.0 && !m_status.empty())
@@ -562,7 +614,7 @@ namespace olam
         const Vec2 inspected = m_localPinned ? Vec2{static_cast<float>(m_localPinned->x) + 0.5f,
                                                     static_cast<float>(m_localPinned->y) + 0.5f}
                                              : m_localCamera.screenToWorld(m_input.mousePosition());
-        const std::vector<std::string> inspector = describeLocalTile(map, inspected, m_localPinned.has_value());
+        const std::vector<std::string> inspector = describeLocalTile(map, inspected, m_localPinned.has_value(), &m_resourceState);
         const Vec2 size = measureTextPanel(inspector);
         drawTextPanel(*m_renderer, {m_localCamera.viewportSize().x - size.x - 4.0f, 4.0f}, inspector);
     }

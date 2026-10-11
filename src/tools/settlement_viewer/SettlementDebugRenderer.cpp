@@ -3,6 +3,7 @@
 #include "core/logging/Log.h"
 #include "render/camera/Camera2D.h"
 #include "render/renderer/Renderer.h"
+#include "settlement/ResourceState.h"
 #include "settlement/SettlementMap.h"
 
 #include <algorithm>
@@ -24,10 +25,16 @@ namespace olam
         }
     }
 
-    void SettlementDebugRenderer::draw(Renderer &renderer, const Camera2D &camera, const SettlementMap &map)
+    void SettlementDebugRenderer::draw(Renderer &renderer, const Camera2D &camera, const SettlementMap &map, const ResourceState *state)
     {
+        const std::uint64_t revision = state ? state->revision() : 0;
+        if (revision != m_stateRevision)
+        {
+            m_stateRevision = revision;
+            m_dirty = true;
+        }
         if (m_dirty)
-            rebuild(renderer, map);
+            rebuild(renderer, map, state);
 
         const auto width = static_cast<float>(map.width());
         const auto height = static_cast<float>(map.height());
@@ -53,7 +60,7 @@ namespace olam
                 renderer.drawTexture(m_texture, {x0, y0, x1 - x0, y1 - y0}, destination);
             }
             if (m_view == LocalView::Terrain)
-                drawSprites(renderer, camera, map, {x0, y0, x1 - x0, y1 - y0});
+                drawSprites(renderer, camera, map, {x0, y0, x1 - x0, y1 - y0}, state);
         }
 
         const Vec2 origin = camera.worldToScreen({0.0f, 0.0f});
@@ -61,12 +68,12 @@ namespace olam
     }
 
     void SettlementDebugRenderer::drawSprites(Renderer &renderer, const Camera2D &camera, const SettlementMap &map,
-                                              const Rect &visible)
+                                              const Rect &visible, const ResourceState *state)
     {
         m_batch.clear();
         const auto start = std::chrono::steady_clock::now();
         const float zoom = camera.zoom();
-        collectLocalSprites(map, visible, zoom, m_hillshade, m_instances);
+        collectLocalSprites(map, visible, zoom, m_hillshade, m_instances, state);
         if (m_instances.empty())
         {
             m_spriteMs = 0.0;
@@ -109,7 +116,7 @@ namespace olam
         renderer.drawBatch(m_atlas, m_batch);
     }
 
-    void SettlementDebugRenderer::rebuild(Renderer &renderer, const SettlementMap &map)
+    void SettlementDebugRenderer::rebuild(Renderer &renderer, const SettlementMap &map, const ResourceState *state)
     {
         m_dirty = false;
         const auto start = std::chrono::steady_clock::now();
@@ -130,7 +137,7 @@ namespace olam
             return;
 
         std::vector<std::uint8_t> pixels(map.tileCount() * 4);
-        colorizeLocalView(map, m_view, m_hillshade, pixels);
+        colorizeLocalView(map, m_view, m_hillshade, pixels, state);
         m_texture.update(pixels);
 
         const int overviewW = width / kOverviewFactor;

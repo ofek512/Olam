@@ -10,6 +10,7 @@ namespace olam
 {
 
     class SettlementMap;
+    class ResourceState;
 
     // Zoom (screen pixels per local tile) at which the local map changes its look. Below kOverviewBelowZoom a
     // downsampled, smoothly filtered landscape; then the 1 texel = 1 tile texture; tree crowns and rocks fade in
@@ -49,7 +50,14 @@ namespace olam
     {
         return kFirstUnderstorySprite + static_cast<int>(kind) * kUnderstoryVariants + variant;
     }
-    constexpr int kSpriteCount = kFirstUnderstorySprite + kUnderstoryKinds * kUnderstoryVariants;
+    constexpr int kForageKinds = static_cast<int>(ForageKind::Count);
+    constexpr int kForageVariants = 2;
+    constexpr int kFirstForageSprite = kFirstUnderstorySprite + kUnderstoryKinds * kUnderstoryVariants;
+    constexpr int forageSprite(ForageKind kind, int variant)
+    {
+        return kFirstForageSprite + static_cast<int>(kind) * kForageVariants + variant;
+    }
+    constexpr int kSpriteCount = kFirstForageSprite + kForageKinds * kForageVariants;
 
     struct SpriteRect
     {
@@ -93,8 +101,8 @@ namespace olam
 
     // Sprites for the Terrain view overlapping `visible` (local tiles) at `zoom`, back to front: pixel-art ground,
     // tree shadows, then rocks and tree crowns row by row. Clears `out`. Placement hashes global coordinates, so
-    // overlapping maps look the same.
+    // overlapping maps look the same. `state` (optional) hides felled trees and fully gathered forage.
     void collectLocalSprites(const SettlementMap &map, const Rect &visible, float zoom, bool hillshade,
-                             std::vector<LocalSpriteInstance> &out);
+                             std::vector<LocalSpriteInstance> &out, const ResourceState *state = nullptr);
 
 } // namespace olam

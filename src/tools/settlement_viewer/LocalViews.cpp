@@ -1,6 +1,7 @@
 #include "tools/settlement_viewer/LocalViews.h"
 
 #include "core/debug/Assert.h"
+#include "settlement/ResourceState.h"
 #include "settlement/SettlementMap.h"
 
 #include <algorithm>
@@ -45,6 +46,9 @@ namespace olam
             {"Soil", Key::F4},
             {"Fertility", Key::F5},
             {"Resources", Key::F6},
+            {"Vegetation", Key::F7},
+            {"Forage", Key::F8},
+            {"Minerals", Key::F9},
         }};
 
         constexpr std::array<Color, static_cast<std::size_t>(SoilType::Count)> kSoilColors = {{
@@ -84,6 +88,12 @@ namespace olam
                 return {50, 110, 200};
             case LocalWater::Creek:
                 return {85, 150, 215};
+            case LocalWater::Brook:
+                return {95, 160, 220};
+            case LocalWater::Marsh:
+                return {88, 128, 112};
+            case LocalWater::Seasonal:
+                return {182, 172, 145};
             default:
                 return {0, 0, 0};
             }
@@ -139,13 +149,19 @@ namespace olam
             return std::clamp(0.4f + 1.04f * lambert, 0.5f, 1.3f);
         }
 
-        Color terrainColor(const SettlementMap &map, std::size_t i, bool withTrees)
+        bool treeShown(const SettlementMap &map, std::size_t i, const ResourceState *state)
+        {
+            const TreeId tree = map.terrain().treeId[i];
+            return tree.isValid() && !(state && state->felledTreeCount() > 0 && state->treeFelled(map, tree));
+        }
+
+        Color terrainColor(const SettlementMap &map, std::size_t i, bool withTrees, const ResourceState *state = nullptr)
         {
             const LocalTerrainData &terrain = map.terrain();
             if (terrain.water[i] != LocalWater::None)
                 return waterColor(terrain.water[i], map.elevationMeters(i));
             Color color = groundColor(terrain.ground[i], terrain.groundCover[i]);
-            if (withTrees && terrain.treeId[i].isValid())
+            if (withTrees && treeShown(map, i, state))
             {
                 // Far zoom shows forest types: dark blue-green conifers, olive small trees, bright riparian belts.
                 constexpr std::array<Color, static_cast<std::size_t>(TreeKind::Count)> kTreeColors = {{
@@ -160,6 +176,99 @@ namespace olam
                 color = scale(kTreeColors[static_cast<std::size_t>(map.trees().kind[t])], 1.1f - 0.35f * age);
             }
             return color;
+        }
+
+        // Distinct debug colours per category.
+        constexpr std::array<Color, static_cast<std::size_t>(TreeKind::Count)> kTreeKindColors = {{
+            {50, 165, 55},   // Broadleaf
+            {20, 95, 105},   // Conifer
+            {185, 175, 60},  // Small tree
+            {110, 215, 170}, // Riparian
+            {70, 95, 175},   // Wetland tree
+        }};
+        constexpr std::array<Color, static_cast<std::size_t>(UnderstoryKind::Count)> kUnderstoryColors = {{
+            {120, 140, 60},  // Shrub
+            {90, 120, 50},   // Bush
+            {215, 215, 130}, // Tall grass
+            {240, 120, 220}, // Flowers
+            {80, 200, 90},   // Fern
+            {120, 170, 190}, // Wetland plants
+            {150, 100, 60},  // Fallen log
+            {170, 170, 170}, // Small rock
+        }};
+        constexpr std::array<Color, static_cast<std::size_t>(ForageKind::Count)> kForageColors = {{
+            {225, 40, 60},   // Berries
+            {235, 200, 150}, // Mushrooms
+            {110, 235, 80},  // Wild greens
+            {190, 120, 240}, // Herbs
+            {160, 105, 55},  // Deadwood
+            {240, 220, 90},  // Reeds
+        }};
+        constexpr std::array<Color, static_cast<std::size_t>(MineralSource::Count)> kMineralSourceColors = {{
+            {230, 40, 40},  // World deposit
+            {240, 150, 40}, // Bog iron
+            {175, 95, 50},  // Ironstone
+            {200, 80, 160}, // Iron-rich rock
+        }};
+
+        // Square of side 2 * radius + 1 centred on a tile, clipped to the map.
+        void paintSquare(const SettlementMap &map, std::span<std::uint8_t> rgba, int cx, int cy, int radius, Color color)
+        {
+            for (int y = std::max(0, cy - radius); y <= std::min(map.height() - 1, cy + radius); ++y)
+            {
+                for (int x = std::max(0, cx - radius); x <= std::min(map.width() - 1, cx + radius); ++x)
+                    write(rgba, map.index({x, y}), color);
+            }
+        }
+
+        void paintDisc(const SettlementMap &map, std::span<std::uint8_t> rgba, float cx, float cy, float radius, Color color)
+        {
+            for (int y = std::max(0, static_cast<int>(std::floor(cy - radius))); y <= std::min(map.height() - 1, static_cast<int>(std::ceil(cy + radius))); ++y)
+            {
+                for (int x = std::max(0, static_cast<int>(std::floor(cx - radius))); x <= std::min(map.width() - 1, static_cast<int>(std::ceil(cx + radius))); ++x)
+                {
+                    const float dx = static_cast<float>(x) + 0.5f - cx;
+                    const float dy = static_cast<float>(y) + 0.5f - cy;
+                    if (dx * dx + dy * dy <= radius * radius)
+                        write(rgba, map.index({x, y}), color);
+                }
+            }
+        }
+
+        // Overlays drawn after the per-tile pass of the sparse-object views.
+        void paintOverlays(const SettlementMap &map, LocalView view, std::span<std::uint8_t> rgba, const ResourceState *state)
+        {
+            if (view == LocalView::Water)
+            {
+                for (const LocalSpring &spring : map.springs())
+                    paintSquare(map, rgba, spring.x, spring.y, 3, spring.kind == SpringKind::Headwater ? Color{255, 255, 255} : Color{120, 255, 255});
+            }
+            else if (view == LocalView::Vegetation)
+            {
+                const UnderstoryData &understory = map.understory();
+                for (std::size_t u = 0; u < understory.size(); ++u)
+                    write(rgba, map.index({understory.x[u], understory.y[u]}), kUnderstoryColors[static_cast<std::size_t>(understory.kind[u])]);
+            }
+            else if (view == LocalView::Forage)
+            {
+                // 5 x 5 marks so single patches stay visible at far zoom; gathered patches fade to grey.
+                const ForageData &forage = map.forage();
+                for (std::size_t f = 0; f < forage.size(); ++f)
+                {
+                    const float left = state ? state->forageRemaining(map, f) / std::max(0.1f, forage.kilograms(f)) : 1.0f;
+                    const Color color = mix({70, 70, 70}, kForageColors[static_cast<std::size_t>(forage.kind[f])], left);
+                    paintSquare(map, rgba, forage.x[f], forage.y[f], 2, color);
+                }
+            }
+            else if (view == LocalView::Minerals)
+            {
+                // Buried bodies half-tone, exposed ones solid; small occurrences get a minimum size to stay visible.
+                for (const MineralOccurrence &m : map.minerals())
+                {
+                    const Color source = kMineralSourceColors[static_cast<std::size_t>(m.source)];
+                    paintDisc(map, rgba, m.centerX, m.centerY, std::max(m.radius, 6.0f), m.exposed ? source : mix(source, {60, 60, 60}, 0.5f));
+                }
+            }
         }
 
     } // namespace
@@ -207,7 +316,8 @@ namespace olam
         return out;
     }
 
-    void colorizeLocalView(const SettlementMap &map, LocalView view, bool hillshade, std::span<std::uint8_t> rgba)
+    void colorizeLocalView(const SettlementMap &map, LocalView view, bool hillshade, std::span<std::uint8_t> rgba,
+                           const ResourceState *state)
     {
         OLAM_ASSERT(rgba.size() == map.tileCount() * 4);
         const LocalTerrainData &terrain = map.terrain();
@@ -233,7 +343,7 @@ namespace olam
                 switch (view)
                 {
                 case LocalView::Terrain:
-                    color = terrainColor(map, i, true);
+                    color = terrainColor(map, i, true, state);
                     break;
                 case LocalView::Elevation:
                 {
@@ -241,9 +351,6 @@ namespace olam
                     color = mix({20, 20, 20}, {250, 250, 250}, t);
                     break;
                 }
-                case LocalView::Water:
-                    color = water ? waterColor(terrain.water[i], map.elevationMeters(i)) : Color{200, 200, 195};
-                    break;
                 case LocalView::Soil:
                     color = kSoilColors[static_cast<std::size_t>(terrain.soil[i])];
                     break;
@@ -257,6 +364,33 @@ namespace olam
                     else
                         color = water ? Color{30, 45, 80} : mix(terrainColor(map, i, false), {128, 128, 128}, 0.7f);
                     break;
+                case LocalView::Vegetation:
+                    if (water)
+                        color = Color{30, 45, 80};
+                    else if (treeShown(map, i, state))
+                        color = kTreeKindColors[static_cast<std::size_t>(map.trees().kind[terrain.treeId[i].index()])];
+                    else
+                        color = mix(terrainColor(map, i, false), {110, 110, 110}, 0.75f);
+                    break;
+                case LocalView::Forage:
+                    color = water ? Color{30, 45, 80} : mix(terrainColor(map, i, true, state), {90, 90, 90}, 0.8f);
+                    break;
+                case LocalView::Minerals:
+                    if (water)
+                        color = Color{30, 45, 80};
+                    else if (terrain.resource[i] == LocalResource::Stone)
+                        color = {120, 100, 140};
+                    else if (terrain.resource[i] == LocalResource::Clay)
+                        color = {165, 110, 80};
+                    else
+                        color = mix(terrainColor(map, i, false), {110, 110, 110}, 0.8f);
+                    break;
+                case LocalView::Water:
+                    if (water)
+                        color = waterColor(terrain.water[i], map.elevationMeters(i));
+                    else
+                        color = terrain.ground[i] == LocalGround::Mud ? Color{150, 165, 150} : Color{200, 200, 195};
+                    break;
                 case LocalView::Count:
                     break;
                 }
@@ -265,6 +399,7 @@ namespace olam
                 write(rgba, i, color);
             }
         }
+        paintOverlays(map, view, rgba, state);
 
         // Buried ore bodies show as faint discs.
         if (view != LocalView::Resources)

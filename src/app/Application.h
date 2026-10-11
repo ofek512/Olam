@@ -6,6 +6,7 @@
 #include "platform/sdl/SdlPlatform.h"
 #include "render/camera/Camera2D.h"
 #include "settlement/LocalTypes.h"
+#include "settlement/ResourceState.h"
 #include "settlement/SettlementConfig.h"
 #include "tools/settlement_viewer/LocalViews.h"
 #include "tools/world_viewer/WorldViews.h"
@@ -13,6 +14,7 @@
 #include "world/WorldConfig.h"
 #include "worldgen/WorldGenerator.h"
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -77,6 +79,8 @@ namespace olam
         void selectLocalView(LocalView view);
         // Founds (or reopens) the settlement on the pinned, else hovered, world tile.
         void foundSettlement();
+        // Developer test harvest on the pinned, else hovered, local tile: gather forage (all with `all`) or fell a tree.
+        void testHarvest(bool all);
         void setStatus(std::string message);
         void drawOverlay();
         void drawLocalOverlay();
@@ -106,6 +110,10 @@ namespace olam
         LocalView m_localView = LocalView::Terrain;
         bool m_localHillshade = true;
         std::optional<LocalCoord> m_localPinned;
+        // Gathering state of the active settlement and what test harvests collected (kg).
+        ResourceState m_resourceState;
+        std::array<float, static_cast<std::size_t>(ForageKind::Count)> m_gatheredKg{};
+        float m_woodKg = 0.0f;
         std::vector<std::string> m_siteWarnings;
         std::string m_status;
         double m_statusSeconds = 0.0;

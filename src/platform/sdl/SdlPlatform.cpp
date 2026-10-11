@@ -27,6 +27,10 @@ namespace olam
                 return Key::D;
             case SDL_SCANCODE_R:
                 return Key::R;
+            case SDL_SCANCODE_G:
+                return Key::G;
+            case SDL_SCANCODE_Y:
+                return Key::Y;
             case SDL_SCANCODE_N:
                 return Key::N;
             case SDL_SCANCODE_H:

@@ -18,6 +18,10 @@ namespace olam
         double tileSizeMeters = 2.0;
         // World drainage (m^3/s) from which flow shows as a creek; world rivers start at the stream threshold.
         float creekMinDischarge = 1.0f;
+        // Smaller headwater flow down to this shows as a brook (springs at its head).
+        float brookMinDischarge = 0.08f;
+        // Brooks in drier country (moisture index rainfall / evaporation below this) only run seasonally.
+        float seasonalBrookMoisture = 0.55f;
     };
 
     std::optional<std::string> validateSettlementConfig(const SettlementConfig &config, const WorldConfig &world);

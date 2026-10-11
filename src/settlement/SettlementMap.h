@@ -54,6 +54,27 @@ namespace olam
         std::size_t size() const { return x.size(); }
     };
 
+    struct LocalSpring
+    {
+        std::uint16_t x = 0;
+        std::uint16_t y = 0;
+        SpringKind kind = SpringKind::Headwater;
+    };
+
+    // Gatherable patches, row-major, at most one per tile; may share a tile with water (reeds) or minerals. Holds
+    // the generated maximum only: harvesting state is gameplay data kept elsewhere.
+    struct ForageData
+    {
+        std::vector<std::uint16_t> x;
+        std::vector<std::uint16_t> y;
+        std::vector<ForageKind> kind;
+        // Maximum quantity in units of 0.1 kg (also the initial quantity).
+        std::vector<std::uint16_t> quantity;
+
+        std::size_t size() const { return x.size(); }
+        float kilograms(std::size_t i) const { return static_cast<float>(quantity[i]) / 10.0f; }
+    };
+
     // A patch of ore on the map. Exposed patches are marked in the resource layer; buried ones are known only
     // from this list (found later by prospecting).
     struct MineralOccurrence
@@ -111,6 +132,12 @@ namespace olam
         const UnderstoryData &understory() const { return m_understory; }
         // Index into understory() of the object on `coord`, if any (binary search).
         std::optional<std::size_t> understoryAt(LocalCoord coord) const;
+        ForageData &forage() { return m_forage; }
+        const ForageData &forage() const { return m_forage; }
+        std::optional<std::size_t> forageAt(LocalCoord coord) const;
+        // Springs inside the map, row-major.
+        std::vector<LocalSpring> &springs() { return m_springs; }
+        const std::vector<LocalSpring> &springs() const { return m_springs; }
         std::vector<MineralOccurrence> &minerals() { return m_minerals; }
         const std::vector<MineralOccurrence> &minerals() const { return m_minerals; }
 
@@ -123,6 +150,8 @@ namespace olam
         LocalTerrainData m_terrain;
         TreeData m_trees;
         UnderstoryData m_understory;
+        ForageData m_forage;
+        std::vector<LocalSpring> m_springs;
         std::vector<MineralOccurrence> m_minerals;
     };
 

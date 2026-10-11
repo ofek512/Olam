@@ -23,6 +23,10 @@ namespace olam
                                config.tileSizeMeters);
         if (!(config.creekMinDischarge > 0.0f))
             return "creek discharge threshold must be positive";
+        if (!(config.brookMinDischarge > 0.0f && config.brookMinDischarge <= config.creekMinDischarge))
+            return "brook discharge threshold must be positive and at most the creek threshold";
+        if (!(config.seasonalBrookMoisture >= 0.0f && config.seasonalBrookMoisture <= 2.0f))
+            return "seasonal brook moisture must be within [0, 2]";
         return std::nullopt;
     }
 

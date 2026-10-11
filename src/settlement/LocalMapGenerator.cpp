@@ -1,6 +1,7 @@
 #include "settlement/LocalMapGenerator.h"
 
 #include "core/math/MathUtil.h"
+#include "core/logging/Log.h"
 #include "core/noise/Noise.h"
 #include "core/random/CoordinateHash.h"
 #include "core/random/Seed.h"
@@ -12,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <vector>
@@ -47,6 +49,7 @@ namespace olam
             kRoughness,   // world slope (m/m)
             kStone,       // local building stone 0..1
             kClay,        // local clay 0..1
+            kWetland,     // 1 on wetland biome or peat, 0 otherwise
             kFieldCount,
         };
 
@@ -191,8 +194,9 @@ namespace olam
                     values[2] = slopeAt(world, c);
                     values[3] = materials.stone;
                     values[4] = materials.clay;
+                    values[5] = world.geography().biome[n] == Biome::Wetland || world.geography().soil[n] == SoilType::Peat ? 1.0f : 0.0f;
                 };
-                float land[5] = {};
+                float land[6] = {};
                 if (water == SurfaceWater::Land)
                 {
                     landValues(coord, land);
@@ -205,13 +209,13 @@ namespace olam
                         const WorldCoord n = neighbor(coord, static_cast<Direction8>(d));
                         if (!world.isValid(n) || world.hydrology().surfaceWater[world.index(n)] != SurfaceWater::Land)
                             continue;
-                        float values[5];
+                        float values[6];
                         landValues(n, values);
-                        for (int v = 0; v < 5; ++v)
+                        for (int v = 0; v < 6; ++v)
                             land[v] += values[v];
                         ++count;
                     }
-                    for (int v = 0; v < 5 && count > 0; ++v)
+                    for (int v = 0; v < 6 && count > 0; ++v)
                         land[v] /= static_cast<float>(count);
                 }
                 out[kFertility] = land[0];
@@ -219,6 +223,7 @@ namespace olam
                 out[kRoughness] = land[2];
                 out[kStone] = land[3];
                 out[kClay] = land[4];
+                out[kWetland] = land[5];
             }
 
             int m_x0;
@@ -338,6 +343,30 @@ namespace olam
             return LocalResource::None;
         }
 
+        // Which water wins where channels and wetlands overlap (lakes and the sea are never overwritten).
+        int waterRank(LocalWater water)
+        {
+            switch (water)
+            {
+            case LocalWater::Seasonal:
+                return 1;
+            case LocalWater::Marsh:
+                return 2;
+            case LocalWater::Brook:
+                return 3;
+            case LocalWater::Creek:
+                return 4;
+            case LocalWater::River:
+                return 5;
+            case LocalWater::Lake:
+            case LocalWater::Ocean:
+                return 6;
+            default:
+                break;
+            }
+            return 0;
+        }
+
         // Generation state shared by the passes. Height and water are padded by one tile so slopes at the map
         // border match the neighbouring map (seamlessness).
         struct Generator
@@ -365,6 +394,7 @@ namespace olam
             Layer<std::uint8_t> clay;       // 0..255
             Layer<Biome> biome;
             Layer<std::uint8_t> canopy; // stand closure 0..255 around each tile (trees pass), for the understory
+            Layer<std::uint8_t> wet;    // waterlogged ground (wet hollows, spring seeps) 0 / 255
 
             float metersX(int localX) const { return (static_cast<float>(origin.x + localX) + 0.5f) * tileM; }
             float metersY(int localY) const { return (static_cast<float>(origin.y + localY) + 0.5f) * tileM; }
@@ -411,7 +441,8 @@ namespace olam
             }
 
             void terrainPass(SettlementMap &map);
-            void riverPass();
+            void riverPass(SettlementMap &map);
+            void springPass(SettlementMap &map);
             void groundPass(SettlementMap &map);
             void resourcePass(SettlementMap &map);
             template <typename ForEachPatchTile>
@@ -420,6 +451,7 @@ namespace olam
             TreeKind treeKind(const SettlementMap &map, int x, int y, float grove, float slope, const CoarseNoise *stands,
                               std::uint64_t hash) const;
             void understoryPass(SettlementMap &map);
+            void foragePass(SettlementMap &map);
             float slopeAtTile(int x, int y) const;
         };
 
@@ -443,6 +475,10 @@ namespace olam
             // Ridge noise: 1 - |fbm| crests; a non-integer lacunarity keeps octaves' lattice zeros from lining up.
             const CoarseNoise ridges(noise::FractalSampler(deriveSeed(seed, olam::seedId("RIDGES")), {4, 1.0f / 1600.0f, 1.93f, 0.5f}),
                                      origin, -1, -1, width, height, tileM);
+            const CoarseNoise hollows(noise::FractalSampler(deriveSeed(seed, olam::seedId("HOLLOWS")), {3, 1.0f / 220.0f, 1.93f, 0.5f}),
+                                      origin, -1, -1, width, height, tileM);
+            const CoarseNoise wetDistricts(noise::FractalSampler(deriveSeed(seed, olam::seedId("WETDIST")), {2, 1.0f / 1500.0f, 1.93f, 0.5f}),
+                                           origin, -1, -1, width, height, tileM);
 
             std::vector<WorldFields::Column> columns(static_cast<std::size_t>(width + 2));
             for (int x = -1; x <= width; ++x)
@@ -512,6 +548,27 @@ namespace olam
                         if (lakeWeight > 0.0f)
                             h += lakeWeight * std::max(0.0f, lakeSurfaceNear(cwx, cwy, values[kHeight]) + 0.3f + 4.0f * land - h);
                         h = std::max(h, 0.2f);
+
+                        // Marshes and wet hollows: in wetlands, and in flat, wet lowlands, in hollows of a 220 m noise.
+                        // Flat wet lowlands only become marshy in some districts (poorly drained basins).
+                        const float potential =
+                            std::max(0.9f * values[kWetland],
+                                     0.5f * smoothstep(0.9f, 1.4f, values[kAridity]) * (1.0f - smoothstep(0.004f, 0.02f, values[kRoughness])) *
+                                         smoothstep(-0.05f, 0.35f, wetDistricts.at(x, y))) *
+                            smoothstep(-8.0f, -2.0f, values[kTemperature]) * smoothstep(0.05f, 0.3f, land);
+                        if (potential > 0.0f)
+                        {
+                            // fbm is roughly within +-0.7: at potential 0.35 ~5 % marsh and ~15 % wet ground, in wetlands
+                            // about a third marsh.
+                            const float hollow = hollows.at(x, y);
+                            const float marshFrom = 0.55f - 0.45f * potential;
+                            const float wetFrom = marshFrom - 0.15f;
+                            h = std::max(0.2f, h - 0.4f * smoothstep(wetFrom, marshFrom, hollow));
+                            if (hollow > marshFrom)
+                                water = LocalWater::Marsh;
+                            else if (hollow > wetFrom && rowInside && x >= 0 && x < width)
+                                wet[map.index({x, y})] = 255;
+                        }
                     }
                     height_[padded(x, y)] = h;
                     water_[padded(x, y)] = water;
@@ -542,14 +599,15 @@ namespace olam
 
         // 2. Rivers and creeks: smooth centrelines through world tile centres along the world flow, meandering, with
         //    widths from discharge. Built from global geometry, so they continue across neighbouring maps.
-        void Generator::riverPass()
+        void Generator::riverPass(SettlementMap &map)
         {
             const HydrologyData &hydrology = world.hydrology();
             const auto creekMin = static_cast<std::uint32_t>(std::floor(config.creekMinDischarge * 100.0f + 0.5f));
+            const auto brookMin = static_cast<std::uint32_t>(std::floor(config.brookMinDischarge * 100.0f + 0.5f));
             const auto streamMin =
                 static_cast<std::uint32_t>(std::floor(world.config().generation.hydrology.streamDischarge * 100.0f + 0.5f));
             const auto isChannel = [&](std::size_t i)
-            { return hydrology.surfaceWater[i] == SurfaceWater::Land && hydrology.discharge[i] >= creekMin; };
+            { return hydrology.surfaceWater[i] == SurfaceWater::Land && hydrology.discharge[i] >= brookMin; };
             const auto downstream = [&](std::size_t i) -> std::size_t
             {
                 const Direction8 direction = hydrology.flowDirection[i];
@@ -576,14 +634,19 @@ namespace olam
                 }
                 return best;
             };
-            // World tile centre in padded-free local tile coordinates (tile x spans [x, x + 1)).
+            // Channel node of a world tile: its centre, moved by up to a quarter tile (hash of the world tile, so every
+            // map and every segment through the tile agree). Breaks the straight 8-direction world flow lines.
+            const std::uint64_t nodeSeed = deriveSeed(seed, olam::seedId("RIVNODE"));
             const auto centre = [&](std::size_t i)
             {
                 const WorldCoord c = world.coordFromIndex(i);
+                const std::uint64_t h = coordinateHash(nodeSeed, c.x, c.y);
+                const float jitterX = 0.5f * (unitFromHash(h, 0) - 0.5f) * static_cast<float>(ratio);
+                const float jitterY = 0.5f * (unitFromHash(h, 24) - 0.5f) * static_cast<float>(ratio);
                 return Vec2d{static_cast<float>(static_cast<std::int64_t>(c.x) * ratio + ratio / 2 - origin.x) +
-                                 (ratio % 2 == 0 ? 0.0f : 0.5f),
+                                 (ratio % 2 == 0 ? 0.0f : 0.5f) + jitterX,
                              static_cast<float>(static_cast<std::int64_t>(c.y) * ratio + ratio / 2 - origin.y) +
-                                 (ratio % 2 == 0 ? 0.0f : 0.5f)};
+                                 (ratio % 2 == 0 ? 0.0f : 0.5f) + jitterY};
             };
             const auto surfaceOf = [&](std::size_t i)
             {
@@ -597,14 +660,18 @@ namespace olam
             {
                 if (discharge >= static_cast<float>(streamMin))
                     return riverWidthMeters(static_cast<std::uint32_t>(discharge));
+                if (discharge < static_cast<float>(creekMin))
+                    return lerp(0.8f, 1.8f, clamp01((discharge - static_cast<float>(brookMin)) / std::max(1.0f, static_cast<float>(creekMin) - static_cast<float>(brookMin))));
                 const float t = clamp01((discharge / 100.0f - config.creekMinDischarge) /
                                         std::max(0.01f, static_cast<float>(streamMin) / 100.0f - config.creekMinDischarge));
                 return 2.0f + 4.0f * t;
             };
 
-            noise::FractalSampler meander(deriveSeed(seed, olam::seedId("MEANDER")), {3, 1.0f / 800.0f, 2.0f, 0.5f});
-            noise::FractalSampler bends(deriveSeed(seed, olam::seedId("BENDS")), {2, 1.0f, 2.0f, 0.5f});
-            const float meanderTiles = 0.15f * static_cast<float>(ratio);
+            // Few octaves: finer wiggles would bend the centreline tighter than the channel's half width, which shows
+            // as cusps on the inner banks.
+            noise::FractalSampler meander(deriveSeed(seed, olam::seedId("MEANDER")), {2, 1.0f / 1100.0f, 1.93f, 0.5f});
+            const std::uint64_t bendSeed = deriveSeed(seed, olam::seedId("BENDS"));
+            const float meanderTiles = 0.2f * static_cast<float>(ratio);
             // Confluences: centrelines must meet exactly there, so meander offsets fade out around them.
             const auto isConfluence = [&](std::size_t i)
             {
@@ -620,9 +687,10 @@ namespace olam
             };
 
             // Order-independent writes (max water class, min height, max bank) keep overlapping segments consistent.
-            const auto stamp = [&](Vec2d a, Vec2d b, float halfWidth, float surface, LocalWater kind, float wallSlope)
+            const auto stamp = [&](Vec2d a, Vec2d b, float halfWidth, float surface, LocalWater kind, float wallSlope, float bankScale)
             {
-                const float bank = std::max(4.0f, 2.0f * halfWidth);
+                // Capped, so the bank zone of wide rivers stays inside the bend radius (no cusps on inner bends).
+                const float bank = std::max(4.0f, std::min(2.0f * halfWidth, 24.0f));
                 const float reachTiles = halfWidth + bank;
                 const int x0 = std::max(-1, static_cast<int>(std::floor(std::min(a.x, b.x) - reachTiles)));
                 const int x1 = std::min(width, static_cast<int>(std::ceil(std::max(a.x, b.x) + reachTiles)));
@@ -631,7 +699,7 @@ namespace olam
                 const float abx = b.x - a.x;
                 const float aby = b.y - a.y;
                 const float lengthSq = std::max(abx * abx + aby * aby, 1e-6f);
-                const float depth = 0.5f + 0.05f * halfWidth * tileM;
+                const float depth = kind == LocalWater::Seasonal ? 0.3f : 0.5f + 0.05f * halfWidth * tileM;
                 for (int y = y0; y <= y1; ++y)
                 {
                     for (int x = x0; x <= x1; ++x)
@@ -650,7 +718,7 @@ namespace olam
                             continue;
                         if (d <= halfWidth)
                         {
-                            if (kind > existing)
+                            if (waterRank(kind) > waterRank(existing))
                                 water_[p] = kind;
                             height_[p] = std::min(height_[p], surface - depth);
                         }
@@ -660,7 +728,8 @@ namespace olam
                             height_[p] = std::min(height_[p], surface + 0.3f + (d - halfWidth) * tileM * wallSlope);
                             if (x >= 0 && y >= 0 && x < width && y < height)
                             {
-                                const auto strength = static_cast<std::uint8_t>(255.0f * (1.0f - (d - halfWidth) / bank));
+                                const auto strength =
+                                    static_cast<std::uint8_t>(255.0f * bankScale * (1.0f - (d - halfWidth) / bank));
                                 std::uint8_t &near = nearRiver[static_cast<std::size_t>(y) * static_cast<std::size_t>(width) +
                                                                static_cast<std::size_t>(x)];
                                 near = std::max(near, strength);
@@ -705,6 +774,11 @@ namespace olam
                     const int samples = std::max(8, static_cast<int>(std::ceil(1.3f * chord / kSampleSpacingTiles)));
                     // Valley walls: gentle in lowlands, steep in mountains.
                     const float wallSlope = std::min(0.06f + 3.0f * slopeAt(world, world.coordFromIndex(tile)), 0.5f);
+                    // Brooks in dry country run only in the wet season and leave a dry bed; perennial brooks rise at
+                    // a spring.
+                    const bool seasonal = static_cast<float>(world.climate().moisture[tile]) / 255.0f * 2.0f < config.seasonalBrookMoisture;
+                    const bool headSpring = up == std::numeric_limits<std::size_t>::max() && q1 < static_cast<float>(creekMin) && !seasonal;
+                    const std::uint64_t bendHash = coordinateHash(bendSeed, wx, wy);
 
                     Vec2d previous{};
                     for (int k = 0; k <= samples; ++k)
@@ -718,12 +792,17 @@ namespace olam
                         Vec2d point = base;
                         if (length > 1e-6f)
                         {
-                            // Valley-scale wander plus bends whose wavelength scales with the channel width.
+                            // Valley-scale wander plus meander bends. Bends are a function of the position along the
+                            // segment: n half-waves of ~7 channel widths each, 3-9 % of the wavelength high, windowed
+                            // so offset and slope are zero at both nodes and segments join smoothly.
                             const float mx = (static_cast<float>(origin.x) + base.x) * tileM;
                             const float my = (static_cast<float>(origin.y) + base.y) * tileM;
-                            const float wavelengthM = std::max(30.0f, 14.0f * channelM);
+                            const float wavelengthM = std::max(60.0f, 14.0f * widthMeters(q1));
+                            const float halfWaves = std::max(1.0f, std::floor(chord * tileM / (0.5f * wavelengthM) + 0.5f));
+                            const float bendTiles = (0.03f + 0.06f * unitFromHash(bendHash, 0)) * wavelengthM / tileM *
+                                                    (((bendHash >> 32) & 1u) != 0 ? 1.0f : -1.0f);
                             float offset = meanderTiles * meander.fbm(mx, my) +
-                                           0.5f * wavelengthM / tileM * bends.fbm(mx / wavelengthM, my / wavelengthM);
+                                           bendTiles * std::sin(3.14159265f * halfWaves * t) * std::sin(3.14159265f * t);
                             if (startNode)
                                 offset *= smoothstep(0.0f, 0.5f, t);
                             if (endNode)
@@ -732,8 +811,30 @@ namespace olam
                         }
                         if (k > 0)
                         {
-                            const LocalWater kind = discharge >= static_cast<float>(streamMin) ? LocalWater::River : LocalWater::Creek;
-                            stamp(previous, point, std::max(0.75f, 0.5f * channelM / tileM), lerp(s1, s2, t), kind, wallSlope);
+                            LocalWater kind = LocalWater::River;
+                            float bankScale = 1.0f;
+                            float minHalfWidth = 0.75f;
+                            if (discharge < static_cast<float>(creekMin))
+                            {
+                                kind = seasonal ? LocalWater::Seasonal : LocalWater::Brook;
+                                bankScale = seasonal ? 0.3f : 0.6f;
+                                minHalfWidth = 0.6f;
+                            }
+                            else if (discharge < static_cast<float>(streamMin))
+                            {
+                                kind = LocalWater::Creek;
+                            }
+                            stamp(previous, point, std::max(minHalfWidth, 0.5f * channelM / tileM), lerp(s1, s2, t), kind, wallSlope,
+                                  bankScale);
+                        }
+                        else if (headSpring)
+                        {
+                            // Spring pool at the very start of the brook.
+                            stamp(point, point, 1.2f, s1, LocalWater::Brook, wallSlope, 0.6f);
+                            const int sx = static_cast<int>(std::floor(point.x));
+                            const int sy = static_cast<int>(std::floor(point.y));
+                            if (sx >= 0 && sy >= 0 && sx < width && sy < height && water_[padded(sx, sy)] == LocalWater::Brook)
+                                map.springs().push_back({static_cast<std::uint16_t>(sx), static_cast<std::uint16_t>(sy), SpringKind::Headwater});
                         }
                         previous = point;
                     }
@@ -748,11 +849,92 @@ namespace olam
             return std::sqrt(dzdx * dzdx + dzdy * dzdy);
         }
 
+        // 2b. Hillside springs: groundwater emerging on moderate slopes in wet climates (permeable sedimentary rock
+        //     most), with a small pool and a seep of waterlogged ground around it, but no lasting stream. One candidate
+        //     per 600 m cell of the global grid, judged from world data at the candidate, so overlapping maps agree.
+        void Generator::springPass(SettlementMap &map)
+        {
+            const std::int64_t cell = std::max<std::int64_t>(1, static_cast<std::int64_t>(std::floor(600.0f / tileM + 0.5f)));
+            constexpr float kMaxSeepRadiusM = 20.0f;
+            const auto reachTiles = static_cast<std::int64_t>(std::ceil(1.3f * kMaxSeepRadiusM / tileM)) + 2;
+            const std::int64_t cx0 = floorDiv(static_cast<std::int64_t>(origin.x) - reachTiles, cell);
+            const std::int64_t cx1 = floorDiv(static_cast<std::int64_t>(origin.x) + width + reachTiles, cell);
+            const std::int64_t cy0 = floorDiv(static_cast<std::int64_t>(origin.y) - reachTiles, cell);
+            const std::int64_t cy1 = floorDiv(static_cast<std::int64_t>(origin.y) + height + reachTiles, cell);
+            const std::uint64_t springSeed = deriveSeed(seed, olam::seedId("SPRINGS"));
+
+            for (std::int64_t cy = cy0; cy <= cy1; ++cy)
+            {
+                for (std::int64_t cx = cx0; cx <= cx1; ++cx)
+                {
+                    const std::uint64_t h = coordinateHash(springSeed, static_cast<std::int32_t>(cx), static_cast<std::int32_t>(cy));
+                    const float gx = (static_cast<float>(cx) + unitFromHash(h, 0)) * static_cast<float>(cell);
+                    const float gy = (static_cast<float>(cy) + unitFromHash(h, 24)) * static_cast<float>(cell);
+                    const WorldCoord tile{static_cast<std::int32_t>(floorDiv(static_cast<std::int64_t>(std::floor(gx)), ratio)),
+                                          static_cast<std::int32_t>(floorDiv(static_cast<std::int64_t>(std::floor(gy)), ratio))};
+                    if (!world.isValid(tile))
+                        continue;
+                    const std::size_t w = world.index(tile);
+                    if (world.hydrology().surfaceWater[w] != SurfaceWater::Land)
+                        continue;
+                    const float moisture = static_cast<float>(world.climate().moisture[w]) / 255.0f * 2.0f;
+                    const float celsius = static_cast<float>(world.climate().meanAnnualTemperature[w]) / 10.0f;
+                    const float slope = slopeAt(world, tile);
+                    float rock = 0.5f;
+                    if (world.terrain().rockType[w] == RockType::Sedimentary)
+                        rock = 1.0f;
+                    else if (world.terrain().rockType[w] == RockType::Metamorphic)
+                        rock = 0.6f;
+                    const float potential = smoothstep(0.85f, 1.3f, moisture) * smoothstep(0.015f, 0.04f, slope) *
+                                            (1.0f - smoothstep(0.2f, 0.35f, slope)) * rock * smoothstep(-3.0f, 2.0f, celsius);
+                    if (!(unitFromHash(h, 40) < 0.35f * potential))
+                        continue;
+
+                    const float sx = gx - static_cast<float>(origin.x);
+                    const float sy = gy - static_cast<float>(origin.y);
+                    const float radius = lerp(8.0f, kMaxSeepRadiusM, unitFromHash(coordinateHash(h, 1, 2), 0)) / tileM;
+                    const int x0 = std::max(-1, static_cast<int>(std::floor(sx - 1.3f * radius)));
+                    const int x1 = std::min(width, static_cast<int>(std::ceil(sx + 1.3f * radius)));
+                    const int y0 = std::max(-1, static_cast<int>(std::floor(sy - 1.3f * radius)));
+                    const int y1 = std::min(height, static_cast<int>(std::ceil(sy + 1.3f * radius)));
+                    for (int y = y0; y <= y1; ++y)
+                    {
+                        for (int x = x0; x <= x1; ++x)
+                        {
+                            const std::size_t p = padded(x, y);
+                            if (water_[p] != LocalWater::None)
+                                continue;
+                            const float dx = static_cast<float>(x) + 0.5f - sx;
+                            const float dy = static_cast<float>(y) + 0.5f - sy;
+                            const float d = std::sqrt(dx * dx + dy * dy);
+                            if (d <= 1.0f)
+                            {
+                                water_[p] = LocalWater::Brook;
+                                height_[p] -= 0.3f;
+                                continue;
+                            }
+                            // Ragged seep edge from a per-tile hash of the global position.
+                            const float ragged = 0.3f * (unitFromHash(coordinateHash(h, origin.x + x, origin.y + y), 0) - 0.5f);
+                            if (d / radius + ragged < 1.0f && x >= 0 && y >= 0 && x < width && y < height)
+                                wet[map.index({x, y})] = 255;
+                        }
+                    }
+                    const int tx = static_cast<int>(std::floor(sx));
+                    const int ty = static_cast<int>(std::floor(sy));
+                    if (tx >= 0 && ty >= 0 && tx < width && ty < height && water_[padded(tx, ty)] == LocalWater::Brook)
+                        map.springs().push_back({static_cast<std::uint16_t>(tx), static_cast<std::uint16_t>(ty), SpringKind::Hillside});
+                }
+            }
+            std::sort(map.springs().begin(), map.springs().end(), [](const LocalSpring &a, const LocalSpring &b)
+                      { return a.y != b.y ? a.y < b.y : a.x < b.x; });
+        }
+
         // 3. Ground material, ground cover, fertility, soil near rivers, final water and elevation layers.
         void Generator::groundPass(SettlementMap &map)
         {
             auto &terrain = map.terrain();
-            noise::FractalSampler patches(deriveSeed(seed, olam::seedId("GROUND")), {3, 1.0f / 120.0f, 2.0f, 0.5f});
+            const CoarseNoise patches(noise::FractalSampler(deriveSeed(seed, olam::seedId("GROUND")), {3, 1.0f / 120.0f, 1.93f, 0.5f}),
+                                      origin, 0, 0, width - 1, height - 1, tileM);
             for (int y = 0; y < height; ++y)
             {
                 for (int x = 0; x < width; ++x)
@@ -767,8 +949,12 @@ namespace olam
                     if (water != LocalWater::None)
                     {
                         terrain.soil[i] = SoilType::None;
-                        if (water == LocalWater::River || water == LocalWater::Creek)
+                        if (water == LocalWater::River || water == LocalWater::Creek || water == LocalWater::Brook)
                             terrain.ground[i] = LocalGround::Gravel;
+                        else if (water == LocalWater::Seasonal)
+                            terrain.ground[i] = biome[i] == Biome::HotDesert ? LocalGround::Sand : LocalGround::Gravel;
+                        else if (water == LocalWater::Marsh)
+                            terrain.ground[i] = LocalGround::Mud;
                         else
                             terrain.ground[i] = h > -2.0f && water == LocalWater::Ocean ? LocalGround::Sand : LocalGround::Mud;
                         continue;
@@ -779,13 +965,15 @@ namespace olam
                     const float dryness = static_cast<float>(aridity[i]) / 255.0f * 2.0f;
                     const Biome b = biome[i];
                     const SoilType soil = terrain.soil[i];
-                    const float patch = patches.fbm(metersX(x), metersY(y));
+                    const float patch = patches.at(x, y);
 
                     LocalGround ground = LocalGround::Grass;
                     if (b == Biome::Ice || celsius + 2.0f * patch <= -6.0f)
                         ground = LocalGround::Snow;
                     else if (slope >= 0.7f || (soil == SoilType::Rocky && slope >= 0.3f) || (b == Biome::Alpine && slope >= 0.25f))
                         ground = LocalGround::Rock;
+                    else if (wet[i] >= 128)
+                        ground = LocalGround::Mud;
                     else if (shore[i] >= 128)
                         ground = LocalGround::Sand;
                     else if (b == Biome::HotDesert)
@@ -903,8 +1091,10 @@ namespace olam
 
             minorIronPass(map, forEachPatchTile);
 
-            noise::FractalSampler stoneNoise(deriveSeed(seed, olam::seedId("STONE")), {3, 1.0f / 260.0f, 2.0f, 0.5f});
-            noise::FractalSampler clayNoise(deriveSeed(seed, olam::seedId("CLAY")), {3, 1.0f / 120.0f, 2.0f, 0.5f});
+            const CoarseNoise stoneNoise(noise::FractalSampler(deriveSeed(seed, olam::seedId("STONE")), {3, 1.0f / 260.0f, 1.93f, 0.5f}),
+                                         origin, 0, 0, width - 1, height - 1, tileM);
+            const CoarseNoise clayNoise(noise::FractalSampler(deriveSeed(seed, olam::seedId("CLAY")), {3, 1.0f / 120.0f, 1.93f, 0.5f}),
+                                        origin, 0, 0, width - 1, height - 1, tileM);
             for (int y = 0; y < height; ++y)
             {
                 for (int x = 0; x < width; ++x)
@@ -912,10 +1102,8 @@ namespace olam
                     const std::size_t i = map.index({x, y});
                     if (terrain.water[i] != LocalWater::None || terrain.resource[i] != LocalResource::None)
                         continue;
-                    const float mx = metersX(x);
-                    const float my = metersY(y);
                     const float stoneAvailable = static_cast<float>(stone[i]) / 255.0f;
-                    if (terrain.ground[i] == LocalGround::Rock || stoneNoise.fbm(mx, my) > 0.62f - 0.35f * stoneAvailable)
+                    if (terrain.ground[i] == LocalGround::Rock || stoneNoise.at(x, y) > 0.62f - 0.35f * stoneAvailable)
                     {
                         terrain.resource[i] = LocalResource::Stone;
                         terrain.ground[i] = LocalGround::Rock;
@@ -924,7 +1112,7 @@ namespace olam
                     }
                     const float clayAvailable = static_cast<float>(clay[i]) / 255.0f;
                     if (slopeAtTile(x, y) < 0.05f &&
-                        clayNoise.fbm(mx, my) > 0.78f - 0.25f * clayAvailable - 0.2f * static_cast<float>(nearRiver[i]) / 255.0f)
+                        clayNoise.at(x, y) > 0.78f - 0.25f * clayAvailable - 0.2f * static_cast<float>(nearRiver[i]) / 255.0f)
                         terrain.resource[i] = LocalResource::Clay;
                 }
             }
@@ -1022,7 +1210,8 @@ namespace olam
         {
             auto &terrain = map.terrain();
             TreeData &trees = map.trees();
-            noise::FractalSampler clearings(deriveSeed(seed, olam::seedId("CLEARING")), {3, 1.0f / 300.0f, 2.0f, 0.5f});
+            const CoarseNoise clearings(noise::FractalSampler(deriveSeed(seed, olam::seedId("CLEARING")), {3, 1.0f / 300.0f, 1.93f, 0.5f}),
+                                        origin, 0, 0, width - 1, height - 1, tileM);
             const auto coarse = [&](std::uint64_t id, float wavelengthM)
             {
                 return CoarseNoise(noise::FractalSampler(deriveSeed(seed, id), {2, 1.0f / wavelengthM, 1.93f, 0.5f}), origin, 0, 0,
@@ -1067,7 +1256,7 @@ namespace olam
                         continue;
                     const float cover = static_cast<float>(treeCover[i]) / 255.0f;
                     const float threshold = 0.5f - cover;
-                    const float grove = smoothstep(threshold - 0.1f, threshold + 0.1f, clearings.fbm(metersX(x), metersY(y)));
+                    const float grove = smoothstep(threshold - 0.1f, threshold + 0.1f, clearings.at(x, y));
                     // Canopy gaps (windthrow, old fallen trees) only inside closed stands.
                     const float gap = 1.0f - 0.75f * grove * smoothstep(0.3f, 0.55f, gaps.at(x, y));
                     const float closed = grove * std::min(1.0f, 4.0f * cover) * gap;
@@ -1100,7 +1289,7 @@ namespace olam
             const float riparian = static_cast<float>(nearRiver[i]) / 255.0f;
             const SoilType soil = terrain.soil[i];
             const Biome b = biome[i];
-            const bool wet = terrain.ground[i] == LocalGround::Mud || soil == SoilType::Peat;
+            const bool waterlogged = terrain.ground[i] == LocalGround::Mud || soil == SoilType::Peat;
             const bool richSoil = soil == SoilType::Loam || soil == SoilType::Clay || soil == SoilType::Alluvial;
             const bool poorSoil = soil == SoilType::Sandy || soil == SoilType::Rocky || soil == SoilType::Permafrost;
 
@@ -1121,7 +1310,7 @@ namespace olam
             // Riparian: river and creek banks.
             weights[3] = 2.5f * riparian * riparian * smoothstep(-3.0f, 3.0f, celsius);
             // Wetland trees: waterlogged ground only.
-            weights[4] = wet ? 2.0f * smoothstep(-5.0f, 1.0f, celsius) : 0.0f;
+            weights[4] = waterlogged ? 2.0f * smoothstep(-5.0f, 1.0f, celsius) : 0.0f;
 
             // Stands: each category's own patch noise picks the locally dominant kind; a small per-tree jitter
             // mixes kinds along stand borders.
@@ -1179,7 +1368,7 @@ namespace olam
                     const bool vegetated = ground == LocalGround::Grass || ground == LocalGround::Dirt || ground == LocalGround::Mud;
                     const bool rocky = ground == LocalGround::Rock || ground == LocalGround::Gravel || soil == SoilType::Rocky ||
                                        resource == LocalResource::Stone;
-                    const bool wet = ground == LocalGround::Mud || soil == SoilType::Peat || nearRiver[i] >= 200;
+                    const bool waterlogged = ground == LocalGround::Mud || soil == SoilType::Peat || nearRiver[i] >= 200;
                     const Biome b = biome[i];
                     const bool scrubland = b == Biome::Shrubland || b == Biome::Savanna || b == Biome::TropicalDryForest;
 
@@ -1193,7 +1382,7 @@ namespace olam
                         p[3] = ground == LocalGround::Grass && celsius > 2.0f ? 0.018f * cover * open * smoothstep(0.5f, 0.9f, moisture) : 0.0f;
                         p[4] = 0.06f * smoothstep(0.4f, 0.8f, shade) * smoothstep(0.85f, 1.2f, moisture) * smoothstep(0.0f, 5.0f, celsius) *
                                (1.0f - smoothstep(22.0f, 28.0f, celsius));
-                        p[5] = wet ? 0.12f * warm : 0.0f;
+                        p[5] = waterlogged ? 0.12f * warm : 0.0f;
                         p[6] = 0.005f * smoothstep(0.4f, 0.8f, shade);
                     }
                     p[7] = rocky ? 0.025f : 0.004f * smoothstep(0.15f, 0.4f, slopeAtTile(x, y));
@@ -1216,6 +1405,117 @@ namespace olam
                             understory.x.push_back(static_cast<std::uint16_t>(x));
                             understory.y.push_back(static_cast<std::uint16_t>(y));
                             understory.kind.push_back(static_cast<UnderstoryKind>(k));
+                            break;
+                        }
+                        pick -= p[k];
+                    }
+                }
+            }
+        }
+
+        // 7. Forage: gatherable patches from habitat, at most one per tile, on tiles without a tree or understory
+        //    object. Berries at woodland edges and in scrub, mushrooms in moist shade, greens in fertile open ground
+        //    and on banks, herbs in warm meadows and edges, deadwood under mature canopy, reeds in marshes and on
+        //    freshwater shores. The quantity grows with habitat quality.
+        void Generator::foragePass(SettlementMap &map)
+        {
+            const LocalTerrainData &terrain = map.terrain();
+            const UnderstoryData &understory = map.understory();
+            ForageData &forage = map.forage();
+            const auto coarse = [&](std::uint64_t id, float wavelengthM)
+            {
+                return CoarseNoise(noise::FractalSampler(deriveSeed(seed, id), {2, 1.0f / wavelengthM, 1.93f, 0.5f}), origin, 0, 0,
+                                   width - 1, height - 1, tileM);
+            };
+            const CoarseNoise berryPatches = coarse(olam::seedId("BERRIES"), 90.0f);
+            const CoarseNoise mushroomPatches = coarse(olam::seedId("MUSHROOM"), 60.0f);
+            const CoarseNoise greenPatches = coarse(olam::seedId("GREENS"), 50.0f);
+            const std::uint64_t forageSeed = deriveSeed(seed, olam::seedId("FORAGE"));
+            constexpr std::size_t kKinds = static_cast<std::size_t>(ForageKind::Count);
+            // Habitat quantity range per patch (kg) before quality scaling.
+            constexpr float kMinKg[kKinds] = {2.0f, 0.5f, 1.0f, 0.2f, 50.0f, 10.0f};
+            constexpr float kMaxKg[kKinds] = {8.0f, 3.0f, 5.0f, 1.0f, 250.0f, 40.0f};
+
+            std::size_t u = 0;
+            for (int y = 0; y < height; ++y)
+            {
+                for (int x = 0; x < width; ++x)
+                {
+                    const std::size_t i = map.index({x, y});
+                    const bool hasUnderstory = u < understory.size() && understory.y[u] == y && understory.x[u] == x;
+                    u += hasUnderstory ? 1u : 0u;
+                    if (hasUnderstory || terrain.treeId[i].isValid())
+                        continue;
+                    const LocalWater water = terrain.water[i];
+                    const LocalGround ground = terrain.ground[i];
+                    const auto celsius = static_cast<float>(temperature[i]);
+                    const float warm = smoothstep(-2.0f, 4.0f, celsius);
+                    if (warm <= 0.0f || (water != LocalWater::None && water != LocalWater::Marsh))
+                        continue;
+
+                    float p[kKinds] = {};
+                    float quality[kKinds] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+                    bool freshShore = false;
+                    for (int dy = -1; dy <= 1 && !freshShore; ++dy)
+                    {
+                        for (int dx = -1; dx <= 1 && !freshShore; ++dx)
+                            freshShore = (dx != 0 || dy != 0) && isFreshWater(water_[padded(x + dx, y + dy)]);
+                    }
+                    p[5] = (water == LocalWater::Marsh ? 0.12f : freshShore ? 0.06f
+                                                                            : 0.0f) *
+                           warm;
+
+                    const bool vegetated = ground == LocalGround::Grass || ground == LocalGround::Dirt || ground == LocalGround::Mud;
+                    if (water == LocalWater::None && vegetated)
+                    {
+                        const float shade = static_cast<float>(canopy[i]) / 255.0f;
+                        const float open = 1.0f - shade;
+                        const float edge = 4.0f * shade * open;
+                        const float cover = static_cast<float>(terrain.groundCover[i]) / 255.0f;
+                        const float fert = static_cast<float>(terrain.fertility[i]) / 255.0f;
+                        const float moisture = static_cast<float>(aridity[i]) / 255.0f * 2.0f;
+                        const float riparian = static_cast<float>(nearRiver[i]) / 255.0f;
+                        const Biome b = biome[i];
+                        const bool scrubland = b == Biome::Shrubland || b == Biome::Savanna || b == Biome::TropicalDryForest;
+                        const bool organic = terrain.soil[i] == SoilType::Loam || terrain.soil[i] == SoilType::Peat ||
+                                             terrain.soil[i] == SoilType::Clay;
+                        if (ground != LocalGround::Mud)
+                            p[0] = (0.006f * edge + (scrubland ? 0.003f : 0.0f) + 0.0015f * open * cover) * warm *
+                                   smoothstep(0.4f, 0.8f, moisture);
+                        p[1] = 0.005f * smoothstep(0.45f, 0.85f, shade) * smoothstep(0.85f, 1.2f, moisture) *
+                               smoothstep(2.0f, 6.0f, celsius) * (1.0f - smoothstep(22.0f, 27.0f, celsius)) * (organic ? 1.3f : 1.0f);
+                        if (ground != LocalGround::Dirt)
+                            p[2] = (0.004f * open * fert * cover + 0.006f * riparian) * warm;
+                        if (ground != LocalGround::Mud)
+                            p[3] = 0.0025f * (open * cover + 0.5f * edge) * smoothstep(4.0f, 10.0f, celsius) *
+                                   smoothstep(0.4f, 0.7f, moisture) * (1.0f - smoothstep(1.2f, 1.6f, moisture));
+                        p[4] = 0.004f * smoothstep(0.5f, 0.9f, shade);
+                        quality[0] = 0.6f + 0.4f * fert;
+                        quality[1] = 0.6f + 0.4f * smoothstep(0.9f, 1.5f, moisture);
+                        quality[2] = 0.5f + 0.5f * std::max(fert, riparian);
+                        quality[4] = 0.5f + 0.5f * shade;
+                    }
+                    float bound = 0.0f;
+                    for (const float v : p)
+                        bound += v;
+                    const std::uint64_t hash = coordinateHash(forageSeed, origin.x + x, origin.y + y);
+                    const float roll = unitFromHash(hash, 0);
+                    if (!(roll < bound))
+                        continue;
+
+                    p[0] *= smoothstep(-0.2f, 0.3f, berryPatches.at(x, y));
+                    p[1] *= smoothstep(-0.1f, 0.4f, mushroomPatches.at(x, y));
+                    p[2] *= smoothstep(-0.3f, 0.3f, greenPatches.at(x, y));
+                    float pick = roll;
+                    for (std::size_t k = 0; k < kKinds; ++k)
+                    {
+                        if (pick < p[k])
+                        {
+                            const float kg = lerp(kMinKg[k], kMaxKg[k], unitFromHash(hash, 24)) * quality[k];
+                            forage.x.push_back(static_cast<std::uint16_t>(x));
+                            forage.y.push_back(static_cast<std::uint16_t>(y));
+                            forage.kind.push_back(static_cast<ForageKind>(k));
+                            forage.quantity.push_back(static_cast<std::uint16_t>(std::clamp(std::floor(kg * 10.0f + 0.5f), 1.0f, 65535.0f)));
                             break;
                         }
                         pick -= p[k];
@@ -1271,13 +1571,37 @@ namespace olam
                             Layer<std::uint8_t>(width, height, 0),
                             Layer<std::uint8_t>(width, height, 0),
                             Layer<Biome>(width, height, Biome::None),
+                            Layer<std::uint8_t>(width, height, 0),
                             Layer<std::uint8_t>(width, height, 0)};
+        // Pass timings go to the log, so generation cost stays visible as features are added.
+        double passMs[9] = {};
+        auto last = std::chrono::steady_clock::now();
+        const auto lap = [&](int pass)
+        {
+            const auto now = std::chrono::steady_clock::now();
+            passMs[pass] = std::chrono::duration<double, std::milli>(now - last).count();
+            last = now;
+        };
         generator.terrainPass(*map);
-        generator.riverPass();
+        lap(0);
+        generator.riverPass(*map);
+        lap(1);
+        generator.springPass(*map);
+        lap(2);
         generator.groundPass(*map);
+        lap(3);
         generator.resourcePass(*map);
+        lap(4);
         generator.treePass(*map);
+        lap(5);
         generator.understoryPass(*map);
+        lap(6);
+        generator.foragePass(*map);
+        lap(7);
+        logging::info(LogCategory::WorldGen,
+                      "Local map passes (ms): terrain {:.0f} rivers {:.0f} springs {:.0f} ground {:.0f} resources {:.0f} "
+                      "trees {:.0f} understory {:.0f} forage {:.0f}",
+                      passMs[0], passMs[1], passMs[2], passMs[3], passMs[4], passMs[5], passMs[6], passMs[7]);
         return {std::move(map), {}};
     }
 

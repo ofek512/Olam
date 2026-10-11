@@ -488,7 +488,7 @@ namespace
     }
 
     int runLocalMap(const olam::World &world, std::string_view kind, const std::string &pngPath, std::optional<olam::LocalCoord> crop,
-                    float zoom)
+                    float zoom, olam::LocalView view)
     {
         using namespace olam;
         const SettlementConfig config;
@@ -512,6 +512,30 @@ namespace
         logging::info(LogCategory::WorldGen, "Local map at ({}, {}) {} x {} generated in {:.0f} ms, hash 0x{:016X}", site->x,
                       site->y, map.width(), map.height(), millisecondsSince(start), hashSettlementMap(map));
 
+        // World channel tiles under the map, by the local water class they become.
+        {
+            const int reach = localMapReachTiles(config, world.config());
+            const auto brookMin = static_cast<std::uint32_t>(config.brookMinDischarge * 100.0f + 0.5f);
+            const auto creekMin = static_cast<std::uint32_t>(config.creekMinDischarge * 100.0f + 0.5f);
+            int brooks = 0;
+            int creeks = 0;
+            int land = 0;
+            for (int wy = site->y - reach; wy <= site->y + reach; ++wy)
+            {
+                for (int wx = site->x - reach; wx <= site->x + reach; ++wx)
+                {
+                    const std::size_t w = world.index({wx, wy});
+                    if (world.hydrology().surfaceWater[w] != SurfaceWater::Land)
+                        continue;
+                    ++land;
+                    const std::uint32_t q = world.hydrology().discharge[w];
+                    brooks += q >= brookMin && q < creekMin ? 1 : 0;
+                    creeks += q >= creekMin ? 1 : 0;
+                }
+            }
+            logging::info(LogCategory::WorldGen, "  world tiles under the map: land {}  brook {}  creek or larger {}", land, brooks,
+                          creeks);
+        }
         std::size_t water[static_cast<std::size_t>(LocalWater::Count)] = {};
         std::size_t resources[static_cast<std::size_t>(LocalResource::Count)] = {};
         for (std::size_t i = 0; i < map.tileCount(); ++i)
@@ -521,7 +545,7 @@ namespace
         }
         std::string line = std::format("  trees {}  water:", map.trees().size());
         for (std::size_t w = 1; w < static_cast<std::size_t>(LocalWater::Count); ++w)
-            line += std::format(" {} {:.1f}%", toString(static_cast<LocalWater>(w)),
+            line += std::format(" {} {:.2f}%", toString(static_cast<LocalWater>(w)),
                                 100.0 * static_cast<double>(water[w]) / static_cast<double>(map.tileCount()));
         line += "  resources:";
         for (std::size_t r = 1; r < static_cast<std::size_t>(LocalResource::Count); ++r)
@@ -543,6 +567,40 @@ namespace
         for (std::size_t k = 0; k < static_cast<std::size_t>(UnderstoryKind::Count); ++k)
             line += std::format(" {} {}", toString(static_cast<UnderstoryKind>(k)), plants[k]);
         logging::info(LogCategory::WorldGen, "{}", line);
+
+        // Forage: patches and kilograms per kind; food energy per year within a 2 km gathering radius of the centre.
+        const ForageData &forage = map.forage();
+        std::size_t patches[static_cast<std::size_t>(ForageKind::Count)] = {};
+        double kilograms[static_cast<std::size_t>(ForageKind::Count)] = {};
+        double nearbyKcal = 0.0;
+        const double radiusTiles = 2000.0 / map.config().tileSizeMeters;
+        for (std::size_t f = 0; f < forage.size(); ++f)
+        {
+            const auto k = static_cast<std::size_t>(forage.kind[f]);
+            ++patches[k];
+            kilograms[k] += forage.kilograms(f);
+            const double dx = forage.x[f] + 0.5 - map.width() * 0.5;
+            const double dy = forage.y[f] + 0.5 - map.height() * 0.5;
+            if (dx * dx + dy * dy <= radiusTiles * radiusTiles)
+            {
+                const ForageInfo &info = forageInfo(forage.kind[f]);
+                nearbyKcal += forage.kilograms(f) * info.kcalPerKg * info.regrowthPerYear;
+            }
+        }
+        line = std::format("  springs {}  forage {}:", map.springs().size(), forage.size());
+        for (std::size_t k = 0; k < static_cast<std::size_t>(ForageKind::Count); ++k)
+            line += std::format(" {} {} ({:.0f} kg)", toString(static_cast<ForageKind>(k)), patches[k], kilograms[k]);
+        // 2,500 kcal a day per person.
+        line += std::format("  food within 2 km: {:.1f} M kcal/year = {:.1f} person-years", nearbyKcal / 1.0e6,
+                            nearbyKcal / (2500.0 * 365.0));
+        logging::info(LogCategory::WorldGen, "{}", line);
+        if (!map.springs().empty())
+        {
+            line = "  springs at";
+            for (std::size_t s = 0; s < std::min<std::size_t>(5, map.springs().size()); ++s)
+                line += std::format(" ({}, {}) {}", map.springs()[s].x, map.springs()[s].y, toString(map.springs()[s].kind));
+            logging::info(LogCategory::WorldGen, "{}", line);
+        }
         for (const MineralOccurrence &m : map.minerals())
             logging::info(LogCategory::WorldGen, "  {}{} ({}) at ({:.0f}, {:.0f}): grade {}, {} tiles, {} t",
                           m.exposed ? "" : "buried ", toString(m.mineral), toString(m.source), m.centerX, m.centerY, m.grade,
@@ -560,7 +618,7 @@ namespace
         else if (!pngPath.empty())
         {
             std::vector<std::uint8_t> rgba(map.tileCount() * 4);
-            colorizeLocalView(map, LocalView::Terrain, true, rgba);
+            colorizeLocalView(map, view, true, rgba);
             // Whole map at 1:4, or a 768 x 768 crop at full resolution.
             const int step = crop ? 1 : 4;
             const int w = map.width() / 4;
@@ -598,6 +656,7 @@ int main(int argc, char *argv[])
     std::string localSite;
     std::optional<LocalCoord> localCrop;
     float localZoom = 0.0f;
+    LocalView localView = LocalView::Terrain;
     int surveyCount = 0;
     int mineralWorlds = 0;
     int surveySites = 10;
@@ -662,6 +721,24 @@ int main(int argc, char *argv[])
             }
             localCrop = c;
         }
+        else if (arg == "--local-view" && hasValue)
+        {
+            const std::string_view value = argv[++i];
+            bool found = false;
+            for (int v = 0; v < static_cast<int>(LocalView::Count) && !found; ++v)
+            {
+                if (localViewInfo(static_cast<LocalView>(v)).name == value)
+                {
+                    localView = static_cast<LocalView>(v);
+                    found = true;
+                }
+            }
+            if (!found)
+            {
+                std::fprintf(stderr, "unknown --local-view (Terrain, Elevation, Water, Soil, Fertility, Resources, Vegetation, Forage, Minerals)\n");
+                return 2;
+            }
+        }
         else if (arg == "--local-zoom" && hasValue)
         {
             const std::string_view value = argv[++i];
@@ -679,7 +756,8 @@ int main(int argc, char *argv[])
                                  "[--mineral-survey <worlds> [--survey-sites <viable sites per world>]] "
                                  "[--local <x,y | river|coast|lake|forest|plain|mountain|dry> (--png = local map 1:4) "
                                  "[--local-crop <x>,<y> (768 x 768 at full resolution)] "
-                                 "[--local-zoom <px per tile> (--png = 960 x 540 viewer preview centred on --local-crop)]]\n");
+                                 "[--local-zoom <px per tile> (--png = 960 x 540 viewer preview centred on --local-crop)] "
+                                 "[--local-view <view name> (for the 1:4 / crop PNG)]]\n");
             return 2;
         }
     }
@@ -701,7 +779,7 @@ int main(int argc, char *argv[])
         return 1;
     logging::info(LogCategory::WorldGen, "World hash 0x{:016X}", hashWorld(*result.world).combined);
     if (!localSite.empty())
-        return runLocalMap(*result.world, localSite, pngPath, localCrop, localZoom);
+        return runLocalMap(*result.world, localSite, pngPath, localCrop, localZoom, localView);
     if (!pngPath.empty() && !writeOverviewPng(*result.world, pngPath, std::max(1, config.width / 512)))
         logging::error(LogCategory::Core, "Could not write '{}'", pngPath);
 

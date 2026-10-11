@@ -259,12 +259,29 @@ overlap. Passes, in order:
    shores ramp up smoothly from the water. Categorical data (biome, soil) comes from the nearest world tile at a
    warped position, giving organic borders. Low-frequency noise (warps, ridges) is sampled on a global lattice
    every 8 tiles and interpolated bilinearly, which is identical for all maps and much cheaper.
-2. **Rivers and creeks**: every world channel tile with discharge >= 1 m³/s (`creekMinDischarge`) gets a
-   Catmull-Rom centreline through world tile centres along the world flow direction, with valley-scale wander
-   and bends whose wavelength is ~14x the channel width (offsets fade out at confluences so tributaries meet).
-   Width: `riverWidthMeters(Q)` for rivers, 2-6 m for creeks, never narrower than 1.5 tiles. Stamping is
-   order-independent (max water class, min height, max bank strength): channels are carved below the surface and
-   valley walls rise at 6 % in lowlands up to 50 % in mountains.
+   **Marshes and wet hollows**: in hollows of a 220 m noise where the world tile is wetland / peat, or flat
+   (world slope < ~1 %) and wet (moisture > ~1); flat wet lowlands only in some districts (1.5 km noise, poorly
+   drained basins). Hollows sink 0.4 m; the lowest become `Marsh` water, a ring around them waterlogged ground
+   (mud). No hydrology is simulated.
+2. **Rivers, creeks and brooks**: every world channel tile with discharge >= 0.08 m³/s (`brookMinDischarge`;
+   > = 1 m³/s `creekMinDischarge` is a creek) gets a
+   > Catmull-Rom centreline through its world tile's channel node along the world flow direction. A node is the tile
+   > centre moved by up to a quarter tile (hash of the world tile), so channels do not follow straight 8-direction
+   > lines. On top: valley-scale wander (1.1 km noise, up to ~200 m) and meander bends that are a function of the
+   > position along the segment, `A sin(π n t) sin(π t)`: n half-waves of ~7 channel widths, A 3-9 % of the
+   > wavelength, zero offset and slope at both nodes so segments join smoothly and the channel never folds back
+   > (2D bend noise used before produced zigzags). Offsets fade out at confluences so tributaries meet.
+   > Width: `riverWidthMeters(Q)` for rivers, 2-6 m for creeks, 0.8-1.8 m for brooks. Brooks follow the same
+   > world flow graph as rivers, so they run downhill, join channels and end in lakes / the sea; in dry country
+   > (world moisture < `seasonalBrookMoisture` 0.55) they are `Seasonal` dry beds. A perennial brook rises at a
+   > **headwater spring** (small pool at the start of its centreline). Stamping is
+   > order-independent (water rank, min height, max bank strength): channels are carved below the surface and
+   > valley walls rise at 6 % in lowlands up to 50 % in mountains (bank zone capped at 48 m so it stays inside the
+   > bend radius of wide rivers). Brook banks count 60 % (seasonal 30 %) towards
+   > riparian soil, fertility and trees.
+   > 2b. **Hillside springs**: one candidate per 600 m global cell, accepted with 35 % x potential (world moisture,
+   > moderate world slope 1.5-35 %, sedimentary rock best, not frozen): a 2 m pool and an 8-20 m seep of
+   > waterlogged ground, no stream (avoids tracing local paths across map borders).
 3. **Ground**: snow (cold, noisy snow line), rock (steep), beach sand, desert sand/gravel, mud (wetlands, flat
    wet banks), otherwise grass (dirt when sparse); riparian strips stay green in dry country. Ground cover and
    fertility follow world moisture and fertility, slope and river banks; flat banks get alluvial soil.
@@ -302,12 +319,22 @@ overlap. Passes, in order:
    warmth and water; ferns, meadow grass and flowers in patches. Shrubs and bushes peak at stand edges, ferns
    and fallen logs under closed canopy, tall grass and flowers in open grass, rushes and sedges on mud, peat and
    banks, small rocks on rocky ground and slopes. Typical default map: 0.04-0.35 M objects (< 2 MB).
+7. **Forage** (`ForageData`, sparse row-major list, <= 1 per tile, not on tree or understory tiles; kinds and
+   static properties in `forageInfo`): berries (woodland edges, scrub), mushrooms (moist shade, organic soils),
+   wild greens (fertile open grass, banks), herbs (warm meadows, edges), deadwood (closed mature canopy), reeds
+   (marshes and fresh-water shores, never the sea). Each patch stores its generated maximum (0.1 kg units, also
+   the initial amount); harvesting state is not part of the map. Per patch: berries 2-8 kg, mushrooms 0.5-3,
+   greens 1-5, herbs 0.2-1, deadwood 50-250, reeds 10-40, scaled by habitat quality. Renewable kinds regrow
+   once a year; deadwood is finite (5 %/year). Food within a 2 km gathering radius (seed 12345): 1-6 M
+   kcal/year, i.e. food for roughly 1-6 people from forage alone, so a 20-person settlement needs farming soon.
 
-Budget: <= 5 s in Release (measured 3-4.5 s). `olam_generate --local <x,y | river|coast|lake|forest|plain|
+Pass timings are logged (`Local map passes (ms)`). Budget: <= 5 s in Release (measured 3.8-4.6 s; terrain
+~1.8 s dominates). Low-frequency threshold noises (ground patches, stone, clay, groves) use the cached lattice.`olam_generate --local <x,y | river|coast|lake|forest|plain|
 mountain|dry> --png file` picks a matching site nearest the world centre and writes the Terrain view at 1:4
 (`--local-crop x,y`: a 768² crop at full resolution). Viewer: Enter founds a settlement on the pinned (else
-hovered) world tile, M switches between the world and the local map, F1-F6 local views (Terrain, Elevation,
-Water, Soil, Fertility, Resources).
+hovered) world tile, M switches between the world and the local map, F1-F9 local views (Terrain, Elevation,
+Water with springs, Soil, Fertility, Resources, Vegetation, Forage, Minerals; `olam_generate --local-view <name>`
+for the PNG).
 
 ## Debug viewer
 
