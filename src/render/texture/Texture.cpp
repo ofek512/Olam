@@ -44,6 +44,12 @@ namespace olam
         SDL_UpdateTexture(m_texture, nullptr, rgba.data(), m_width * 4);
     }
 
+    void Texture::setLinearFiltering(bool linear)
+    {
+        if (m_texture)
+            SDL_SetTextureScaleMode(m_texture, linear ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST);
+    }
+
     void Texture::destroy()
     {
         if (m_texture)

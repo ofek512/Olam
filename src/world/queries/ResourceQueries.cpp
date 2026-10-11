@@ -1,5 +1,6 @@
 #include "world/queries/ResourceQueries.h"
 
+#include "core/math/MathUtil.h"
 #include "world/World.h"
 #include "world/queries/HydrologyQueries.h"
 #include "world/queries/TerrainQueries.h"
@@ -155,6 +156,135 @@ namespace olam
         }
         result.stone = rock * exposure;
         result.clay = clay;
+        return result;
+    }
+
+    MinorIronPotential minorIronPotentialAt(const World &world, WorldCoord coord)
+    {
+        MinorIronPotential result;
+        const std::size_t i = world.index(coord);
+        const auto &hydrology = world.hydrology();
+        if (world.geography().soil.empty() || hydrology.surfaceWater[i] != SurfaceWater::Land)
+            return result;
+
+        const GeologicalProvince province = world.terrain().province[i];
+        const RockType rock = world.terrain().rockType[i];
+        const SoilType soil = world.geography().soil[i];
+        const float celsius = static_cast<float>(world.climate().meanAnnualTemperature[i]) / 10.0f;
+        const float aridity = static_cast<float>(world.climate().moisture[i]) / 255.0f * 2.0f;
+
+        bool lakeShore = false;
+        for (std::size_t d = 0; d < kDirection8Count; ++d)
+        {
+            const WorldCoord n = neighbor(coord, static_cast<Direction8>(d));
+            lakeShore = lakeShore || (world.isValid(n) && hydrology.surfaceWater[world.index(n)] == SurfaceWater::Lake);
+        }
+
+        // Bog iron: iron leached from soils precipitates where groundwater meets air in cool to temperate wet ground.
+        float wet = 0.0f;
+        if (world.geography().biome[i] == Biome::Wetland)
+            wet = 1.0f;
+        else if (soil == SoilType::Peat)
+            wet = 0.9f;
+        else if (lakeShore)
+            wet = 0.6f;
+        else if (soil == SoilType::Alluvial)
+            wet = 0.45f * smoothstep(0.5f, 1.0f, aridity);
+        else if (riverClassAt(world, i) != RiverClass::None)
+            wet = 0.3f * smoothstep(0.5f, 1.0f, aridity);
+        result.bog = wet * smoothstep(-6.0f, -2.0f, celsius) * (1.0f - smoothstep(16.0f, 24.0f, celsius));
+
+        // Exposure: worn uplands show their rock; plains, floodplains and dunes bury it.
+        float exposure = 0.3f;
+        switch (terrainClassAt(world, coord))
+        {
+        case TerrainClass::Hills:
+            exposure = 1.0f;
+            break;
+        case TerrainClass::Plateau:
+            exposure = 0.8f;
+            break;
+        case TerrainClass::Mountains:
+            exposure = 0.7f;
+            break;
+        case TerrainClass::Plains:
+            break;
+        }
+        float cover = 1.0f;
+        switch (soil)
+        {
+        case SoilType::Rocky:
+            exposure = 1.0f;
+            break;
+        case SoilType::Alluvial:
+        case SoilType::Peat:
+            cover = 0.3f;
+            exposure *= 0.2f;
+            break;
+        case SoilType::Sandy:
+            cover = 0.5f;
+            exposure *= 0.5f;
+            break;
+        default:
+            break;
+        }
+        result.exposure = exposure;
+
+        // Ironstone: iron-rich beds in sedimentary rock, commonest in basin sequences.
+        if (rock == RockType::Sedimentary)
+            result.ironstone = (province == GeologicalProvince::Basin ? 0.6f : 0.4f) * cover;
+
+        // Iron-rich crystalline and volcanic rock, weathered into gossans and small magnetite / haematite lenses.
+        float crystalline = 0.0f;
+        switch (province)
+        {
+        case GeologicalProvince::Shield:
+            crystalline = 0.7f;
+            break;
+        case GeologicalProvince::AncientOrogen:
+            crystalline = 0.8f;
+            break;
+        case GeologicalProvince::ActiveOrogen:
+        case GeologicalProvince::Rift:
+            crystalline = 0.6f;
+            break;
+        case GeologicalProvince::Oceanic:
+            crystalline = 0.3f;
+            break;
+        default:
+            break;
+        }
+        if (rock != RockType::Sedimentary)
+            result.weathered = crystalline * cover;
+        // Laterite: tropical weathering concentrates iron into crusts on any rock.
+        if (soil == SoilType::Laterite)
+        {
+            result.weathered = std::max(result.weathered, 0.8f);
+            result.exposure = std::max(result.exposure, 0.8f);
+        }
+
+        // Iron districts: the rock around a world iron deposit carries more small occurrences.
+        const ResourceData &resources = world.resources();
+        if (!resources.depositId.empty())
+        {
+            bool ironNearby = false;
+            for (int dy = -2; dy <= 2 && !ironNearby; ++dy)
+            {
+                for (int dx = -2; dx <= 2 && !ironNearby; ++dx)
+                {
+                    const WorldCoord n{coord.x + dx, coord.y + dy};
+                    if (!world.isValid(n))
+                        continue;
+                    const DepositId id = resources.depositId[world.index(n)];
+                    ironNearby = id.isValid() && resources.deposits[id.index()].mineral == MineralType::Iron;
+                }
+            }
+            if (ironNearby)
+            {
+                result.ironstone = std::min(1.0f, result.ironstone * 1.5f);
+                result.weathered = std::min(1.0f, result.weathered * 1.5f + 0.1f);
+            }
+        }
         return result;
     }
 

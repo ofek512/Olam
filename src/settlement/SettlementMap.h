@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace olam
@@ -37,8 +38,38 @@ namespace olam
         std::vector<std::uint16_t> y;
         // 0 sapling .. 255 old tree.
         std::vector<std::uint8_t> growth;
+        std::vector<TreeKind> kind;
 
         std::size_t size() const { return x.size(); }
+    };
+
+    // Understory plants and small objects, row-major (sorted by y, then x), at most one per tile and never on a
+    // tree tile. Sparse: no per-tile layer.
+    struct UnderstoryData
+    {
+        std::vector<std::uint16_t> x;
+        std::vector<std::uint16_t> y;
+        std::vector<UnderstoryKind> kind;
+
+        std::size_t size() const { return x.size(); }
+    };
+
+    // A patch of ore on the map. Exposed patches are marked in the resource layer; buried ones are known only
+    // from this list (found later by prospecting).
+    struct MineralOccurrence
+    {
+        LocalResource mineral = LocalResource::None;
+        MineralSource source = MineralSource::WorldDeposit;
+        bool exposed = true;
+        // 1..100, same scale as Deposit::richness.
+        std::uint8_t grade = 0;
+        // Patch centre in local tiles (may lie outside the map) and nominal radius in tiles.
+        float centerX = 0.0f;
+        float centerY = 0.0f;
+        float radius = 0.0f;
+        // Map tiles the patch covers and the ore they hold (tonnes).
+        std::uint32_t tileCount = 0;
+        std::uint32_t tonnes = 0;
     };
 
     // Detailed map of the area around one world tile. Owned by the gameplay layer, not by World.
@@ -76,6 +107,12 @@ namespace olam
         const LocalTerrainData &terrain() const { return m_terrain; }
         TreeData &trees() { return m_trees; }
         const TreeData &trees() const { return m_trees; }
+        UnderstoryData &understory() { return m_understory; }
+        const UnderstoryData &understory() const { return m_understory; }
+        // Index into understory() of the object on `coord`, if any (binary search).
+        std::optional<std::size_t> understoryAt(LocalCoord coord) const;
+        std::vector<MineralOccurrence> &minerals() { return m_minerals; }
+        const std::vector<MineralOccurrence> &minerals() const { return m_minerals; }
 
     private:
         SettlementConfig m_config;
@@ -85,6 +122,8 @@ namespace olam
         std::int32_t m_baseElevationM;
         LocalTerrainData m_terrain;
         TreeData m_trees;
+        UnderstoryData m_understory;
+        std::vector<MineralOccurrence> m_minerals;
     };
 
     // Platform-independent hash of the map's identity, every layer and the trees.

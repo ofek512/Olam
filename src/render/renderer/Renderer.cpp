@@ -1,6 +1,7 @@
 #include "render/renderer/Renderer.h"
 
 #include "core/logging/Log.h"
+#include "render/renderer/SpriteBatch.h"
 #include "render/texture/Texture.h"
 
 #include <SDL3/SDL.h>
@@ -39,7 +40,7 @@ namespace olam
         return static_cast<int>(SDL_GetNumberProperty(properties, SDL_PROP_RENDERER_MAX_TEXTURE_SIZE_NUMBER, 0));
     }
 
-    Texture Renderer::createTexture(int width, int height)
+    Texture Renderer::createTexture(int width, int height, TextureOptions options)
     {
         SDL_Texture *texture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, width, height);
         if (!texture)
@@ -47,9 +48,20 @@ namespace olam
             logging::error(LogCategory::Render, "SDL_CreateTexture {}x{} failed: {}", width, height, SDL_GetError());
             return Texture{};
         }
-        SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
-        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
+        SDL_SetTextureScaleMode(texture, options.linear ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST);
+        SDL_SetTextureBlendMode(texture, options.blend ? SDL_BLENDMODE_BLEND : SDL_BLENDMODE_NONE);
         return Texture(texture, width, height);
+    }
+
+    void Renderer::drawBatch(const Texture &texture, const SpriteBatch &batch)
+    {
+        if (!texture.valid() || batch.empty())
+            return;
+        static_assert(sizeof(SpriteBatch::FColor) == sizeof(SDL_FColor));
+        SDL_RenderGeometryRaw(m_renderer, texture.handle(), &batch.positions()[0].x, sizeof(Vec2),
+                              reinterpret_cast<const SDL_FColor *>(batch.colors().data()), sizeof(SDL_FColor),
+                              &batch.uvs()[0].x, sizeof(Vec2), static_cast<int>(batch.positions().size()),
+                              batch.indices().data(), static_cast<int>(batch.indices().size()), sizeof(std::int32_t));
     }
 
     void Renderer::drawTexture(const Texture &texture, const Rect &source, const Rect &destination)

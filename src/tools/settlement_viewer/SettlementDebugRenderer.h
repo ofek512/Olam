@@ -1,7 +1,11 @@
 #pragma once
 
+#include "render/renderer/SpriteBatch.h"
 #include "render/texture/Texture.h"
+#include "tools/settlement_viewer/LocalSprites.h"
 #include "tools/settlement_viewer/LocalViews.h"
+
+#include <vector>
 
 namespace olam
 {
@@ -10,7 +14,9 @@ namespace olam
     class Renderer;
     class SettlementMap;
 
-    // Draws the active view of a settlement map as one texture (1 texel = 1 local tile), rebuilt only when invalidated.
+    // Draws the active view of a settlement map. Every view is one texture (1 texel = 1 local tile), rebuilt only
+    // when invalidated, with a downsampled copy for far zoom. The Terrain view adds zoom-dependent detail (tree
+    // crowns and rocks, then pixel-art ground) built per frame for the visible tiles only.
     class SettlementDebugRenderer
     {
     public:
@@ -22,10 +28,21 @@ namespace olam
 
         void draw(Renderer &renderer, const Camera2D &camera, const SettlementMap &map);
 
+        // Sprites drawn in the last frame and the time spent building them.
+        std::size_t spriteCount() const { return m_batch.quadCount(); }
+        double spriteMilliseconds() const { return m_spriteMs; }
+
     private:
         void rebuild(Renderer &renderer, const SettlementMap &map);
+        void drawSprites(Renderer &renderer, const Camera2D &camera, const SettlementMap &map, const Rect &visible);
 
         Texture m_texture;
+        Texture m_overview;
+        Texture m_atlas;
+        LocalSpriteAtlas m_atlasData;
+        std::vector<LocalSpriteInstance> m_instances;
+        SpriteBatch m_batch;
+        double m_spriteMs = 0.0;
         LocalView m_view = LocalView::Terrain;
         bool m_hillshade = true;
         bool m_dirty = true;

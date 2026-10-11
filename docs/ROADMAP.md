@@ -50,6 +50,14 @@ Short status checklist. Full vision and rationale: [agent.MD](../agent.MD).
 ## Phase 4 — First playable settlement
 
 - [x] 4A World → local map (`olam_settlement`; Enter founds a settlement, M returns to the world map)
+- [ ] 4A.5 Local ecology, natural resources and visual refinement
+  - [x] 4A.5A Mineral accessibility (minor iron occurrences; `olam_generate --mineral-survey`)
+  - [x] 4A.5B Hybrid visual rendering (zoom levels, sprite atlas, batched sprites; `olam_generate --local-zoom`)
+  - [x] 4A.5C Forest ecology and vegetation diversity (tree kinds, stand structure, understory)
+  - [ ] 4A.5D Springs, brooks and small water features
+  - [ ] 4A.5E Foraging resources
+  - [ ] 4A.5F Resource inspection and test harvesting
+  - [ ] 4A.5G Testing, performance and balancing
 - [ ] 4B First buildings
 - [ ] 4C First population
 - [ ] 4D First economy

@@ -1,12 +1,14 @@
 // Headless world generation: olam_generate [--seed <n|text>] [--size <W>x<H>] [--save <file>]
-//                                          [--landmass-survey <count>]
+//                                          [--landmass-survey <count>] [--mineral-survey <worlds> [--survey-sites <n>]]
 // Logs per-pass timings and world statistics; useful for profiling and on machines without a display.
 
 #include "core/logging/Log.h"
+#include "core/random/Pcg32.h"
 #include "core/random/Seed.h"
 #include "settlement/LocalMapGenerator.h"
 #include "settlement/SiteSelection.h"
 #include "tools/generate/PngWriter.h"
+#include "tools/settlement_viewer/LocalSprites.h"
 #include "tools/settlement_viewer/LocalViews.h"
 #include "world/WorldHash.h"
 #include "world/WorldIO.h"
@@ -22,6 +24,7 @@
 #include <algorithm>
 #include <charconv>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <format>
 #include <limits>
@@ -222,7 +225,270 @@ namespace
         return best;
     }
 
-    int runLocalMap(const olam::World &world, std::string_view kind, const std::string &pngPath, std::optional<olam::LocalCoord> crop)
+    struct SiteMinerals
+    {
+        bool viable = false;
+        olam::GeologicalProvince province = olam::GeologicalProvince::Oceanic;
+        std::size_t stoneTiles = 0;
+        std::size_t clayTiles = 0;
+        double minorSurfaceTonnes = 0.0;
+        double minorBuriedTonnes = 0.0;
+        double minorGradeSum = 0.0; // tonne-weighted
+        double majorIronTonnes = 0.0;
+        double majorIronGradeSum = 0.0;
+        bool anyMajor = false;
+        // Distance to the nearest world iron deposit (km).
+        double ironDepositKm = 1.0e9;
+    };
+
+    // Accessible minerals on the default local map around `site`.
+    SiteMinerals surveySite(const olam::World &world, olam::WorldCoord site, const olam::SettlementConfig &config)
+    {
+        using namespace olam;
+        SiteMinerals result;
+        result.province = world.terrain().province[world.index(site)];
+        const double tileKm = world.config().tileSizeMeters / 1000.0;
+        for (const Deposit &deposit : world.resources().deposits)
+        {
+            if (deposit.mineral != MineralType::Iron)
+                continue;
+            const double dx = deposit.center.x - site.x;
+            const double dy = deposit.center.y - site.y;
+            result.ironDepositKm = std::min(result.ironDepositKm, std::sqrt(dx * dx + dy * dy) * tileKm);
+        }
+        const auto map = generateLocalMap(world, site, config).map;
+        if (!map)
+            return result;
+        for (const LocalResource r : map->terrain().resource.values())
+        {
+            result.stoneTiles += r == LocalResource::Stone ? 1u : 0u;
+            result.clayTiles += r == LocalResource::Clay ? 1u : 0u;
+        }
+        for (const MineralOccurrence &m : map->minerals())
+        {
+            const auto tonnes = static_cast<double>(m.tonnes);
+            if (m.source == MineralSource::WorldDeposit)
+            {
+                result.anyMajor = true;
+                if (m.mineral == LocalResource::Iron)
+                {
+                    result.majorIronTonnes += tonnes;
+                    result.majorIronGradeSum += tonnes * m.grade;
+                }
+                continue;
+            }
+            (m.exposed ? result.minorSurfaceTonnes : result.minorBuriedTonnes) += tonnes;
+            result.minorGradeSum += tonnes * m.grade;
+        }
+        return result;
+    }
+
+    // CPU version of the viewer's Terrain view at `zoom` (px per tile) around `centre`: base texture or overview,
+    // then the zoom-dependent sprites with tint and alpha (nearest sampling). For checking the look headless.
+    std::vector<std::uint8_t> renderLocalPreview(const olam::SettlementMap &map, olam::Vec2 centre, float zoom, int w, int h)
+    {
+        using namespace olam;
+        std::vector<std::uint8_t> base(map.tileCount() * 4);
+        colorizeLocalView(map, LocalView::Terrain, true, base);
+        const std::vector<std::uint8_t> overview = downsampleRgba(base, map.width(), map.height(), kOverviewFactor);
+        const bool far = zoom < kOverviewBelowZoom;
+        const Rect visible{centre.x - static_cast<float>(w) * 0.5f / zoom, centre.y - static_cast<float>(h) * 0.5f / zoom,
+                           static_cast<float>(w) / zoom, static_cast<float>(h) / zoom};
+
+        std::vector<float> rgb(static_cast<std::size_t>(w) * static_cast<std::size_t>(h) * 3, 0.0f);
+        for (int py = 0; py < h; ++py)
+        {
+            for (int px = 0; px < w; ++px)
+            {
+                const float tx = visible.x + (static_cast<float>(px) + 0.5f) / zoom;
+                const float ty = visible.y + (static_cast<float>(py) + 0.5f) / zoom;
+                if (tx < 0.0f || ty < 0.0f || tx >= static_cast<float>(map.width()) || ty >= static_cast<float>(map.height()))
+                    continue;
+                std::size_t source = 0;
+                const std::uint8_t *pixels = base.data();
+                if (far)
+                {
+                    const int ow = map.width() / kOverviewFactor;
+                    const int ox = std::min(ow - 1, static_cast<int>(tx) / kOverviewFactor);
+                    const int oy = std::min(map.height() / kOverviewFactor - 1, static_cast<int>(ty) / kOverviewFactor);
+                    source = (static_cast<std::size_t>(oy) * static_cast<std::size_t>(ow) + static_cast<std::size_t>(ox)) * 4;
+                    pixels = overview.data();
+                }
+                else
+                {
+                    source = map.index({static_cast<int>(tx), static_cast<int>(ty)}) * 4;
+                }
+                const std::size_t target = (static_cast<std::size_t>(py) * static_cast<std::size_t>(w) + static_cast<std::size_t>(px)) * 3;
+                for (int c = 0; c < 3; ++c)
+                    rgb[target + static_cast<std::size_t>(c)] = pixels[source + static_cast<std::size_t>(c)];
+            }
+        }
+
+        const LocalSpriteAtlas atlas = buildLocalSpriteAtlas();
+        std::vector<LocalSpriteInstance> sprites;
+        const auto start = std::chrono::steady_clock::now();
+        collectLocalSprites(map, visible, zoom, true, sprites);
+        logging::info(LogCategory::WorldGen, "Preview zoom {:.2f}: {} sprites collected in {:.2f} ms", zoom, sprites.size(),
+                      millisecondsSince(start));
+        for (const LocalSpriteInstance &s : sprites)
+        {
+            const SpriteRect &r = atlas.rects[s.sprite];
+            const float sx0 = (s.x - visible.x) * zoom;
+            const float sy0 = (s.y - visible.y) * zoom;
+            const int x0 = std::max(0, static_cast<int>(std::floor(sx0)));
+            const int y0 = std::max(0, static_cast<int>(std::floor(sy0)));
+            const int x1 = std::min(w, static_cast<int>(std::ceil(sx0 + s.w * zoom)));
+            const int y1 = std::min(h, static_cast<int>(std::ceil(sy0 + s.h * zoom)));
+            for (int py = y0; py < y1; ++py)
+            {
+                for (int px = x0; px < x1; ++px)
+                {
+                    const float u = (static_cast<float>(px) + 0.5f - sx0) / (s.w * zoom);
+                    const float v = (static_cast<float>(py) + 0.5f - sy0) / (s.h * zoom);
+                    if (u < 0.0f || v < 0.0f || u >= 1.0f || v >= 1.0f)
+                        continue;
+                    const int ax = r.x + std::min(r.w - 1, static_cast<int>((s.mirrored ? 1.0f - u : u) * static_cast<float>(r.w)));
+                    const int ay = r.y + std::min(r.h - 1, static_cast<int>((s.flipped ? 1.0f - v : v) * static_cast<float>(r.h)));
+                    const std::size_t a = (static_cast<std::size_t>(ay) * static_cast<std::size_t>(atlas.width) + static_cast<std::size_t>(ax)) * 4;
+                    const float alpha = static_cast<float>(atlas.rgba[a + 3]) / 255.0f * s.a;
+                    if (alpha <= 0.0f)
+                        continue;
+                    const float tint[3] = {s.r, s.g, s.b};
+                    const std::size_t target = (static_cast<std::size_t>(py) * static_cast<std::size_t>(w) + static_cast<std::size_t>(px)) * 3;
+                    for (int c = 0; c < 3; ++c)
+                    {
+                        const float color = static_cast<float>(atlas.rgba[a + static_cast<std::size_t>(c)]) * tint[c];
+                        float &out = rgb[target + static_cast<std::size_t>(c)];
+                        out += (color - out) * alpha;
+                    }
+                }
+            }
+        }
+        std::vector<std::uint8_t> bytes(rgb.size());
+        for (std::size_t i = 0; i < rgb.size(); ++i)
+            bytes[i] = static_cast<std::uint8_t>(std::clamp(rgb[i], 0.0f, 255.0f));
+        return bytes;
+    }
+
+    // Generates `worlds` worlds from `first` and surveys local-map minerals at random viable (and some harsh) sites.
+    int runMineralSurvey(const olam::WorldConfig &config, std::uint64_t first, int worlds, int sitesPerWorld)
+    {
+        using namespace olam;
+        logging::setCategoryEnabled(LogCategory::WorldGen, false);
+        const SettlementConfig settlement;
+        WorldGenerator generator;
+        addDefaultPasses(generator);
+        std::vector<SiteMinerals> sites;
+        double localMs = 0.0;
+        std::size_t localMaps = 0;
+        std::printf("seed       site        province        viable  stone   clay  minorS t  minorB t  grade  majorFe t  grade  other\n");
+        for (int n = 0; n < worlds; ++n)
+        {
+            const std::uint64_t seed = first + static_cast<std::uint64_t>(n);
+            const WorldGenResult result = generator.generate(config, seed);
+            if (!result.ok())
+                return 1;
+            const World &world = *result.world;
+            Pcg32 rng(deriveSeed(seed, olam::seedId("SURVEY")));
+            int viable = 0;
+            int harsh = 0;
+            const int harshTarget = std::max(1, sitesPerWorld / 3);
+            for (int attempt = 0; attempt < 200000 && (viable < sitesPerWorld || harsh < harshTarget); ++attempt)
+            {
+                const WorldCoord c{static_cast<std::int32_t>(rng.nextBounded(static_cast<std::uint32_t>(world.width()))),
+                                   static_cast<std::int32_t>(rng.nextBounded(static_cast<std::uint32_t>(world.height())))};
+                if (siteError(world, c, settlement))
+                    continue;
+                const std::size_t i = world.index(c);
+                const Biome biome = world.geography().biome[i];
+                const bool isViable = world.geography().fertility[i] >= 77 && biome != Biome::Ice && biome != Biome::Tundra &&
+                                      biome != Biome::Alpine && biome != Biome::HotDesert && biome != Biome::ColdDesert;
+                if ((isViable && viable >= sitesPerWorld) || (!isViable && harsh >= harshTarget))
+                    continue;
+                (isViable ? viable : harsh) += 1;
+                const auto start = std::chrono::steady_clock::now();
+                SiteMinerals s = surveySite(world, c, settlement);
+                localMs += millisecondsSince(start);
+                ++localMaps;
+                s.viable = isViable;
+                std::printf("%-10llu %4d,%-4d   %-15s %-6s %6zu %6zu %9.0f %9.0f %6.1f %10.0f %6.1f  %s\n",
+                            static_cast<unsigned long long>(seed), c.x, c.y, std::string(toString(s.province)).c_str(),
+                            isViable ? "yes" : "no", s.stoneTiles, s.clayTiles, s.minorSurfaceTonnes, s.minorBuriedTonnes,
+                            s.minorSurfaceTonnes + s.minorBuriedTonnes > 0.0
+                                ? s.minorGradeSum / (s.minorSurfaceTonnes + s.minorBuriedTonnes)
+                                : 0.0,
+                            s.majorIronTonnes, s.majorIronTonnes > 0.0 ? s.majorIronGradeSum / s.majorIronTonnes : 0.0,
+                            s.anyMajor ? "major deposit" : "");
+                sites.push_back(s);
+            }
+        }
+
+        const auto report = [&](const char *label, auto include)
+        {
+            std::size_t count = 0;
+            std::size_t stone = 0;
+            std::size_t clay = 0;
+            std::size_t surface = 0;
+            std::size_t any = 0;
+            std::size_t majorIron = 0;
+            std::size_t anyMajor = 0;
+            std::size_t noIron = 0;
+            std::size_t near15 = 0;
+            std::size_t near30 = 0;
+            double minorTonnes = 0.0;
+            double minorGrade = 0.0;
+            double majorTonnes = 0.0;
+            double majorGrade = 0.0;
+            for (const SiteMinerals &s : sites)
+            {
+                if (!include(s))
+                    continue;
+                ++count;
+                const double minor = s.minorSurfaceTonnes + s.minorBuriedTonnes;
+                stone += s.stoneTiles >= 1000 ? 1u : 0u;
+                clay += s.clayTiles >= 200 ? 1u : 0u;
+                surface += s.minorSurfaceTonnes > 0.0 ? 1u : 0u;
+                any += minor > 0.0 ? 1u : 0u;
+                majorIron += s.majorIronTonnes > 0.0 ? 1u : 0u;
+                anyMajor += s.anyMajor ? 1u : 0u;
+                noIron += minor <= 0.0 && s.majorIronTonnes <= 0.0 ? 1u : 0u;
+                near15 += s.ironDepositKm <= 15.0 ? 1u : 0u;
+                near30 += s.ironDepositKm <= 30.0 ? 1u : 0u;
+                minorTonnes += minor;
+                minorGrade += s.minorGradeSum;
+                majorTonnes += s.majorIronTonnes;
+                majorGrade += s.majorIronGradeSum;
+            }
+            if (count == 0)
+                return;
+            const auto pct = [&](std::size_t v)
+            { return 100.0 * static_cast<double>(v) / static_cast<double>(count); };
+            std::printf("%-16s n=%3zu  stone %3.0f%%  clay %3.0f%%  minor Fe: surface %3.0f%% any %3.0f%%  major Fe %3.0f%%  "
+                        "any major %3.0f%%  no Fe %3.0f%%\n",
+                        label, count, pct(stone), pct(clay), pct(surface), pct(any), pct(majorIron), pct(anyMajor), pct(noIron));
+            std::printf("%-16s        minor Fe mean %.0f t/site (grade %.1f)   major Fe mean %.0f t/site with (grade %.1f)   "
+                        "world iron deposit within 15 km %.0f%%, 30 km %.0f%%\n",
+                        "", minorTonnes / static_cast<double>(count), minorTonnes > 0.0 ? minorGrade / minorTonnes : 0.0,
+                        majorIron > 0 ? majorTonnes / static_cast<double>(majorIron) : 0.0,
+                        majorTonnes > 0.0 ? majorGrade / majorTonnes : 0.0, pct(near15), pct(near30));
+        };
+        std::printf("\n");
+        report("viable", [](const SiteMinerals &s)
+               { return s.viable; });
+        report("harsh", [](const SiteMinerals &s)
+               { return !s.viable; });
+        for (std::size_t p = 0; p < static_cast<std::size_t>(GeologicalProvince::Count); ++p)
+        {
+            const auto province = static_cast<GeologicalProvince>(p);
+            report(std::string(toString(province)).c_str(), [&](const SiteMinerals &s)
+                   { return s.province == province; });
+        }
+        std::printf("local maps: %zu, mean %.0f ms\n", localMaps, localMaps > 0 ? localMs / static_cast<double>(localMaps) : 0.0);
+        return 0;
+    }
+
+    int runLocalMap(const olam::World &world, std::string_view kind, const std::string &pngPath, std::optional<olam::LocalCoord> crop,
+                    float zoom)
     {
         using namespace olam;
         const SettlementConfig config;
@@ -264,8 +530,34 @@ namespace
                 line += std::format(" {} {}", toString(static_cast<LocalResource>(r)), resources[r]);
         }
         logging::info(LogCategory::WorldGen, "{}", line);
+        std::size_t kinds[static_cast<std::size_t>(TreeKind::Count)] = {};
+        for (const TreeKind treeKind : map.trees().kind)
+            ++kinds[static_cast<std::size_t>(treeKind)];
+        std::size_t plants[static_cast<std::size_t>(UnderstoryKind::Count)] = {};
+        for (const UnderstoryKind plant : map.understory().kind)
+            ++plants[static_cast<std::size_t>(plant)];
+        line = "  tree kinds:";
+        for (std::size_t k = 0; k < static_cast<std::size_t>(TreeKind::Count); ++k)
+            line += std::format(" {} {}", toString(static_cast<TreeKind>(k)), kinds[k]);
+        line += std::format("  understory {}:", map.understory().size());
+        for (std::size_t k = 0; k < static_cast<std::size_t>(UnderstoryKind::Count); ++k)
+            line += std::format(" {} {}", toString(static_cast<UnderstoryKind>(k)), plants[k]);
+        logging::info(LogCategory::WorldGen, "{}", line);
+        for (const MineralOccurrence &m : map.minerals())
+            logging::info(LogCategory::WorldGen, "  {}{} ({}) at ({:.0f}, {:.0f}): grade {}, {} tiles, {} t",
+                          m.exposed ? "" : "buried ", toString(m.mineral), toString(m.source), m.centerX, m.centerY, m.grade,
+                          m.tileCount, m.tonnes);
 
-        if (!pngPath.empty())
+        if (!pngPath.empty() && zoom > 0.0f)
+        {
+            constexpr int kPreviewW = 960;
+            constexpr int kPreviewH = 540;
+            const Vec2 centre = crop ? Vec2{static_cast<float>(crop->x), static_cast<float>(crop->y)}
+                                     : Vec2{static_cast<float>(map.width()) * 0.5f, static_cast<float>(map.height()) * 0.5f};
+            if (!tools::writePng(pngPath, kPreviewW, kPreviewH, renderLocalPreview(map, centre, zoom, kPreviewW, kPreviewH)))
+                logging::error(LogCategory::Core, "Could not write '{}'", pngPath);
+        }
+        else if (!pngPath.empty())
         {
             std::vector<std::uint8_t> rgba(map.tileCount() * 4);
             colorizeLocalView(map, LocalView::Terrain, true, rgba);
@@ -305,7 +597,10 @@ int main(int argc, char *argv[])
     std::string pngPath;
     std::string localSite;
     std::optional<LocalCoord> localCrop;
+    float localZoom = 0.0f;
     int surveyCount = 0;
+    int mineralWorlds = 0;
+    int surveySites = 10;
     for (int i = 1; i < argc; ++i)
     {
         const std::string_view arg = argv[i];
@@ -313,6 +608,16 @@ int main(int argc, char *argv[])
         if (arg == "--seed" && hasValue)
         {
             seed = parseSeed(argv[++i]);
+        }
+        else if ((arg == "--mineral-survey" || arg == "--survey-sites") && hasValue)
+        {
+            const std::string_view value = argv[++i];
+            int &target = arg == "--mineral-survey" ? mineralWorlds : surveySites;
+            if (std::from_chars(value.data(), value.data() + value.size(), target).ec != std::errc{} || target < 1)
+            {
+                std::fprintf(stderr, "invalid %s count\n", std::string(arg).c_str());
+                return 2;
+            }
         }
         else if (arg == "--landmass-survey" && hasValue)
         {
@@ -357,12 +662,24 @@ int main(int argc, char *argv[])
             }
             localCrop = c;
         }
+        else if (arg == "--local-zoom" && hasValue)
+        {
+            const std::string_view value = argv[++i];
+            if (std::from_chars(value.data(), value.data() + value.size(), localZoom).ec != std::errc{} || localZoom < 0.1f ||
+                localZoom > 128.0f)
+            {
+                std::fprintf(stderr, "invalid --local-zoom, expected 0.1..128 px per tile\n");
+                return 2;
+            }
+        }
         else
         {
             std::fprintf(stderr, "usage: olam_generate [--seed <n|text>] [--size <W>x<H>] [--save <file>] [--png <file>] "
                                  "[--landmass-survey <count> (--png = file prefix)] "
+                                 "[--mineral-survey <worlds> [--survey-sites <viable sites per world>]] "
                                  "[--local <x,y | river|coast|lake|forest|plain|mountain|dry> (--png = local map 1:4) "
-                                 "[--local-crop <x>,<y> (768 x 768 at full resolution)]]\n");
+                                 "[--local-crop <x>,<y> (768 x 768 at full resolution)] "
+                                 "[--local-zoom <px per tile> (--png = 960 x 540 viewer preview centred on --local-crop)]]\n");
             return 2;
         }
     }
@@ -374,6 +691,8 @@ int main(int argc, char *argv[])
 
     if (surveyCount > 0)
         return runLandmassSurvey(config, seed, surveyCount, pngPath);
+    if (mineralWorlds > 0)
+        return runMineralSurvey(config, seed, mineralWorlds, surveySites);
 
     WorldGenerator generator;
     addDefaultPasses(generator);
@@ -382,7 +701,7 @@ int main(int argc, char *argv[])
         return 1;
     logging::info(LogCategory::WorldGen, "World hash 0x{:016X}", hashWorld(*result.world).combined);
     if (!localSite.empty())
-        return runLocalMap(*result.world, localSite, pngPath, localCrop);
+        return runLocalMap(*result.world, localSite, pngPath, localCrop, localZoom);
     if (!pngPath.empty() && !writeOverviewPng(*result.world, pngPath, std::max(1, config.width / 512)))
         logging::error(LogCategory::Core, "Could not write '{}'", pngPath);
 

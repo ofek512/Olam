@@ -29,6 +29,9 @@ namespace olam
         // Replaces all pixels; expects width * height RGBA8 pixels, rows tightly packed.
         void update(std::span<const std::uint8_t> rgba);
 
+        // Bilinear instead of nearest sampling (smooth when scaled down, crisp pixel art when off).
+        void setLinearFiltering(bool linear);
+
     private:
         void destroy();
 

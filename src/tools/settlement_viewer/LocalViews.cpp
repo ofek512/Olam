@@ -113,20 +113,26 @@ namespace olam
             return {255, 0, 255};
         }
 
-        // Lambert shading from the north-west on local elevation; ~1 on flat ground.
+        // Lambert shading from the north-west on local elevation; ~1 on flat ground. The gradient is a Sobel over
+        // +-2 tiles, so decimetre elevation steps on flat ground do not show as a checker pattern.
         float hillshadeAt(const SettlementMap &map, int x, int y)
         {
             const auto &elevation = map.terrain().elevation;
-            const int x0 = std::max(x - 1, 0);
-            const int x1 = std::min(x + 1, map.width() - 1);
-            const int y0 = std::max(y - 1, 0);
-            const int y1 = std::min(y + 1, map.height() - 1);
+            const auto at = [&](int ex, int ey)
+            { return static_cast<float>(elevation.at(std::clamp(ex, 0, map.width() - 1), std::clamp(ey, 0, map.height() - 1))); };
             const auto tile = static_cast<float>(map.config().tileSizeMeters);
             constexpr float kExaggeration = 2.0f;
-            const float dzdx = static_cast<float>(elevation.at(x1, y) - elevation.at(x0, y)) / 10.0f /
-                               (static_cast<float>(x1 - x0) * tile) * kExaggeration;
-            const float dzdy = static_cast<float>(elevation.at(x, y1) - elevation.at(x, y0)) / 10.0f /
-                               (static_cast<float>(y1 - y0) * tile) * kExaggeration;
+            float gx = 0.0f;
+            float gy = 0.0f;
+            for (int k = -1; k <= 1; ++k)
+            {
+                const float w = k == 0 ? 2.0f : 1.0f;
+                gx += w * (at(x + 2, y + k) - at(x - 2, y + k));
+                gy += w * (at(x + k, y + 2) - at(x + k, y - 2));
+            }
+            // Weights sum to 4, spacing 4 tiles, elevation in decimetres.
+            const float dzdx = gx / 4.0f / 10.0f / (4.0f * tile) * kExaggeration;
+            const float dzdy = gy / 4.0f / 10.0f / (4.0f * tile) * kExaggeration;
             const float length = std::sqrt(dzdx * dzdx + dzdy * dzdy + 1.0f);
             constexpr float kLight = 0.57735f;
             const float lambert = (dzdx * kLight + dzdy * kLight + kLight) / length;
@@ -141,8 +147,17 @@ namespace olam
             Color color = groundColor(terrain.ground[i], terrain.groundCover[i]);
             if (withTrees && terrain.treeId[i].isValid())
             {
-                const float age = static_cast<float>(map.trees().growth[terrain.treeId[i].index()]) / 255.0f;
-                color = scale({52, 92, 48}, 1.1f - 0.35f * age);
+                // Far zoom shows forest types: dark blue-green conifers, olive small trees, bright riparian belts.
+                constexpr std::array<Color, static_cast<std::size_t>(TreeKind::Count)> kTreeColors = {{
+                    {52, 92, 48},  // Broadleaf
+                    {34, 66, 52},  // Conifer
+                    {78, 98, 54},  // Small tree
+                    {70, 108, 52}, // Riparian
+                    {44, 78, 50},  // Wetland tree
+                }};
+                const std::size_t t = terrain.treeId[i].index();
+                const float age = static_cast<float>(map.trees().growth[t]) / 255.0f;
+                color = scale(kTreeColors[static_cast<std::size_t>(map.trees().kind[t])], 1.1f - 0.35f * age);
             }
             return color;
         }
@@ -153,6 +168,43 @@ namespace olam
     {
         OLAM_ASSERT(view < LocalView::Count);
         return kViews[static_cast<std::size_t>(view)];
+    }
+
+    LocalRgb localGroundColor(const SettlementMap &map, int x, int y, bool hillshade)
+    {
+        const std::size_t i = map.index({x, y});
+        Color color = terrainColor(map, i, false);
+        if (hillshade && map.terrain().water[i] == LocalWater::None)
+            color = scale(color, hillshadeAt(map, x, y));
+        return {std::clamp(color.r, 0.0f, 255.0f), std::clamp(color.g, 0.0f, 255.0f), std::clamp(color.b, 0.0f, 255.0f)};
+    }
+
+    std::vector<std::uint8_t> downsampleRgba(std::span<const std::uint8_t> rgba, int width, int height, int factor)
+    {
+        OLAM_ASSERT(factor >= 1 && rgba.size() == static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4);
+        const int w = width / factor;
+        const int h = height / factor;
+        std::vector<std::uint8_t> out(static_cast<std::size_t>(w) * static_cast<std::size_t>(h) * 4);
+        const auto count = static_cast<std::uint32_t>(factor * factor);
+        for (int y = 0; y < h; ++y)
+        {
+            for (int x = 0; x < w; ++x)
+            {
+                std::uint32_t sum[4] = {};
+                for (int dy = 0; dy < factor; ++dy)
+                {
+                    const std::size_t row = (static_cast<std::size_t>(y * factor + dy) * static_cast<std::size_t>(width) +
+                                             static_cast<std::size_t>(x * factor)) *
+                                            4;
+                    for (int dx = 0; dx < factor * 4; ++dx)
+                        sum[dx % 4] += rgba[row + static_cast<std::size_t>(dx)];
+                }
+                const std::size_t o = (static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x)) * 4;
+                for (int c = 0; c < 4; ++c)
+                    out[o + static_cast<std::size_t>(c)] = static_cast<std::uint8_t>((sum[c] + count / 2) / count);
+            }
+        }
+        return out;
     }
 
     void colorizeLocalView(const SettlementMap &map, LocalView view, bool hillshade, std::span<std::uint8_t> rgba)
@@ -211,6 +263,35 @@ namespace olam
                 if (hillshade && !water && view != LocalView::Elevation)
                     color = scale(color, hillshadeAt(map, x, y));
                 write(rgba, i, color);
+            }
+        }
+
+        // Buried ore bodies show as faint discs.
+        if (view != LocalView::Resources)
+            return;
+        for (const MineralOccurrence &m : map.minerals())
+        {
+            if (m.exposed)
+                continue;
+            const int x0 = std::max(0, static_cast<int>(std::floor(m.centerX - m.radius)));
+            const int x1 = std::min(map.width() - 1, static_cast<int>(std::ceil(m.centerX + m.radius)));
+            const int y0 = std::max(0, static_cast<int>(std::floor(m.centerY - m.radius)));
+            const int y1 = std::min(map.height() - 1, static_cast<int>(std::ceil(m.centerY + m.radius)));
+            for (int y = y0; y <= y1; ++y)
+            {
+                for (int x = x0; x <= x1; ++x)
+                {
+                    const std::size_t i = map.index({x, y});
+                    const float dx = static_cast<float>(x) + 0.5f - m.centerX;
+                    const float dy = static_cast<float>(y) + 0.5f - m.centerY;
+                    if (dx * dx + dy * dy > m.radius * m.radius || terrain.water[i] != LocalWater::None ||
+                        terrain.resource[i] != LocalResource::None)
+                        continue;
+                    Color color = mix(kResourceColors[static_cast<std::size_t>(m.mineral)], {128, 128, 128}, 0.6f);
+                    if (hillshade)
+                        color = scale(color, hillshadeAt(map, x, y));
+                    write(rgba, i, color);
+                }
             }
         }
     }

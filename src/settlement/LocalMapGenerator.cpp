@@ -24,6 +24,15 @@ namespace olam
 
         constexpr std::uint64_t kLocalMapSeedId = seedId("LOCALMAP");
 
+        // Ore per covered tile (tonnes): strategic deposits are worked deep, minor occurrences are shallow lenses.
+        constexpr std::uint32_t kMajorTonnesPerTile = 150;
+        constexpr std::uint32_t kMinorTonnesPerTile = 30;
+        // Minor iron: one candidate per setting per cell of the global grid; chance = setting potential x this.
+        constexpr float kMinorCellM = 500.0f;
+        constexpr float kMinorChance[3] = {0.08f, 0.04f, 0.04f}; // bog, ironstone, weathered rock
+        // Regional richness of minor iron (some districts are simply poor).
+        constexpr float kMinorDistrictM = 25000.0f;
+
         // World values interpolated smoothly per local tile.
         enum Field : std::size_t
         {
@@ -355,6 +364,7 @@ namespace olam
             Layer<std::uint8_t> stone;      // 0..255
             Layer<std::uint8_t> clay;       // 0..255
             Layer<Biome> biome;
+            Layer<std::uint8_t> canopy; // stand closure 0..255 around each tile (trees pass), for the understory
 
             float metersX(int localX) const { return (static_cast<float>(origin.x + localX) + 0.5f) * tileM; }
             float metersY(int localY) const { return (static_cast<float>(origin.y + localY) + 0.5f) * tileM; }
@@ -404,7 +414,12 @@ namespace olam
             void riverPass();
             void groundPass(SettlementMap &map);
             void resourcePass(SettlementMap &map);
+            template <typename ForEachPatchTile>
+            void minorIronPass(SettlementMap &map, ForEachPatchTile &forEachPatchTile);
             void treePass(SettlementMap &map);
+            TreeKind treeKind(const SettlementMap &map, int x, int y, float grove, float slope, const CoarseNoise *stands,
+                              std::uint64_t hash) const;
+            void understoryPass(SettlementMap &map);
             float slopeAtTile(int x, int y) const;
         };
 
@@ -813,12 +828,35 @@ namespace olam
             }
         }
 
-        // 4. Ore outcrops around world deposits, stone outcrops, clay pits.
+        // 4. Ore outcrops around world deposits, minor iron occurrences, stone outcrops, clay pits.
         void Generator::resourcePass(SettlementMap &map)
         {
             auto &terrain = map.terrain();
             const ResourceData &resources = world.resources();
             noise::FractalSampler oreNoise(deriveSeed(seed, olam::seedId("ORE")), {3, 1.0f / 40.0f, 2.0f, 0.5f});
+            // Visits the map tiles of a noisy disc (local tile centre, radius in tiles).
+            const auto forEachPatchTile = [&](float cx, float cy, float radius, auto visit)
+            {
+                const int x0 = std::max(0, static_cast<int>(std::floor(cx - 1.5f * radius)));
+                const int x1 = std::min(width - 1, static_cast<int>(std::ceil(cx + 1.5f * radius)));
+                const int y0 = std::max(0, static_cast<int>(std::floor(cy - 1.5f * radius)));
+                const int y1 = std::min(height - 1, static_cast<int>(std::ceil(cy + 1.5f * radius)));
+                for (int y = y0; y <= y1; ++y)
+                {
+                    for (int x = x0; x <= x1; ++x)
+                    {
+                        const std::size_t i = map.index({x, y});
+                        if (terrain.water[i] != LocalWater::None)
+                            continue;
+                        const float dx = static_cast<float>(x) + 0.5f - cx;
+                        const float dy = static_cast<float>(y) + 0.5f - cy;
+                        const float d = std::sqrt(dx * dx + dy * dy) / radius;
+                        if (d + 0.4f * oreNoise.fbm(metersX(x), metersY(y)) < 1.0f)
+                            visit(i);
+                    }
+                }
+            };
+
             const std::uint64_t oreSeed = deriveSeed(seed, olam::seedId("OREPATCH"));
             const int margin = reach + 1;
             for (int wy = site.y - margin; wy <= site.y + margin; ++wy)
@@ -842,28 +880,28 @@ namespace olam
                                          static_cast<float>(origin.y);
                         const float radiusM = (12.0f + 30.0f * static_cast<float>(deposit.richness) / 100.0f) *
                                               (0.7f + 0.6f * unitFromHash(hash, 40));
-                        const float radius = radiusM / tileM;
-                        const int x0 = std::max(0, static_cast<int>(std::floor(cx - 1.5f * radius)));
-                        const int x1 = std::min(width - 1, static_cast<int>(std::ceil(cx + 1.5f * radius)));
-                        const int y0 = std::max(0, static_cast<int>(std::floor(cy - 1.5f * radius)));
-                        const int y1 = std::min(height - 1, static_cast<int>(std::ceil(cy + 1.5f * radius)));
-                        for (int y = y0; y <= y1; ++y)
+                        MineralOccurrence occurrence;
+                        occurrence.mineral = kind;
+                        occurrence.source = MineralSource::WorldDeposit;
+                        occurrence.grade = deposit.richness;
+                        occurrence.centerX = cx;
+                        occurrence.centerY = cy;
+                        occurrence.radius = radiusM / tileM;
+                        forEachPatchTile(cx, cy, occurrence.radius, [&](std::size_t i)
+                                         {
+                                             if (terrain.resource[i] != kind)
+                                                 ++occurrence.tileCount;
+                                             terrain.resource[i] = kind; });
+                        if (occurrence.tileCount > 0)
                         {
-                            for (int x = x0; x <= x1; ++x)
-                            {
-                                const std::size_t i = map.index({x, y});
-                                if (terrain.water[i] != LocalWater::None)
-                                    continue;
-                                const float dx = static_cast<float>(x) + 0.5f - cx;
-                                const float dy = static_cast<float>(y) + 0.5f - cy;
-                                const float d = std::sqrt(dx * dx + dy * dy) / radius;
-                                if (d + 0.4f * oreNoise.fbm(metersX(x), metersY(y)) < 1.0f)
-                                    terrain.resource[i] = kind;
-                            }
+                            occurrence.tonnes = occurrence.tileCount * kMajorTonnesPerTile;
+                            map.minerals().push_back(occurrence);
                         }
                     }
                 }
             }
+
+            minorIronPass(map, forEachPatchTile);
 
             noise::FractalSampler stoneNoise(deriveSeed(seed, olam::seedId("STONE")), {3, 1.0f / 260.0f, 2.0f, 0.5f});
             noise::FractalSampler clayNoise(deriveSeed(seed, olam::seedId("CLAY")), {3, 1.0f / 120.0f, 2.0f, 0.5f});
@@ -892,13 +930,112 @@ namespace olam
             }
         }
 
-        // 5. Trees: per-tile chance from world tree cover, clearings and ground; growth stage from the same hash.
+        // 4b. Minor iron: small low-grade bog iron, ironstone and iron-rich rock patches from the local geology, so most
+        //     habitable places have a little iron. Candidates sit on a global cell grid and are judged from world data
+        //     at the candidate, so overlapping maps agree.
+        template <typename ForEachPatchTile>
+        void Generator::minorIronPass(SettlementMap &map, ForEachPatchTile &forEachPatchTile)
+        {
+            auto &terrain = map.terrain();
+            const std::int64_t cell = std::max<std::int64_t>(1, static_cast<std::int64_t>(std::floor(kMinorCellM / tileM + 0.5f)));
+            // Largest patch reach in tiles (radius up to 20 m, noise widens it by 1.5).
+            const auto patchReach = static_cast<std::int64_t>(std::ceil(1.5f * 20.0f / tileM)) + 1;
+            const std::int64_t cx0 = floorDiv(static_cast<std::int64_t>(origin.x) - patchReach, cell);
+            const std::int64_t cx1 = floorDiv(static_cast<std::int64_t>(origin.x) + width + patchReach, cell);
+            const std::int64_t cy0 = floorDiv(static_cast<std::int64_t>(origin.y) - patchReach, cell);
+            const std::int64_t cy1 = floorDiv(static_cast<std::int64_t>(origin.y) + height + patchReach, cell);
+
+            noise::FractalSampler district(deriveSeed(seed, olam::seedId("MINORFE")), {2, 1.0f / kMinorDistrictM, 2.0f, 0.5f});
+            const std::uint64_t minorSeed = deriveSeed(seed, olam::seedId("MINORFEP"));
+            constexpr MineralSource kSources[3] = {MineralSource::BogIron, MineralSource::Ironstone, MineralSource::WeatheredRock};
+
+            for (std::int64_t cy = cy0; cy <= cy1; ++cy)
+            {
+                for (std::int64_t cx = cx0; cx <= cx1; ++cx)
+                {
+                    for (std::size_t k = 0; k < 3; ++k)
+                    {
+                        const std::uint64_t place = coordinateHash(deriveSeed(minorSeed, 2 * k + 1), static_cast<std::int32_t>(cx),
+                                                                   static_cast<std::int32_t>(cy));
+                        const std::uint64_t shape = coordinateHash(deriveSeed(minorSeed, 2 * k + 2), static_cast<std::int32_t>(cx),
+                                                                   static_cast<std::int32_t>(cy));
+                        // Candidate on the global grid of local tiles.
+                        const float gx = (static_cast<float>(cx) + unitFromHash(place, 0)) * static_cast<float>(cell);
+                        const float gy = (static_cast<float>(cy) + unitFromHash(place, 24)) * static_cast<float>(cell);
+                        const WorldCoord tile{static_cast<std::int32_t>(floorDiv(static_cast<std::int64_t>(std::floor(gx)), ratio)),
+                                              static_cast<std::int32_t>(floorDiv(static_cast<std::int64_t>(std::floor(gy)), ratio))};
+                        if (!world.isValid(tile))
+                            continue;
+                        const MinorIronPotential potential = minorIronPotentialAt(world, tile);
+                        const float setting = k == 0 ? potential.bog : k == 1 ? potential.ironstone
+                                                                              : potential.weathered;
+                        if (setting <= 0.0f)
+                            continue;
+                        const float richness = smoothstep(-0.35f, 0.25f, district.fbm(gx * tileM, gy * tileM));
+                        if (!(unitFromHash(shape, 0) < kMinorChance[k] * setting * richness))
+                            continue;
+
+                        MineralOccurrence occurrence;
+                        occurrence.mineral = LocalResource::Iron;
+                        occurrence.source = kSources[k];
+                        occurrence.exposed = k == 0 || unitFromHash(place, 40) < 0.25f + 0.75f * potential.exposure;
+                        occurrence.centerX = gx - static_cast<float>(origin.x);
+                        occurrence.centerY = gy - static_cast<float>(origin.y);
+                        // Buried bodies are larger but must be found; surface lenses are a few metres across.
+                        const float radiusM = occurrence.exposed ? lerp(4.0f, 10.0f, unitFromHash(shape, 24))
+                                                                 : lerp(8.0f, 20.0f, unitFromHash(shape, 24));
+                        occurrence.radius = radiusM / tileM;
+                        const float gradeLow = k == 1 ? 15.0f : 10.0f;
+                        occurrence.grade = static_cast<std::uint8_t>(
+                            std::floor(lerp(gradeLow, 35.0f, unitFromHash(shape, 40) * (0.5f + 0.5f * setting)) + 0.5f));
+
+                        forEachPatchTile(occurrence.centerX, occurrence.centerY, occurrence.radius, [&](std::size_t i)
+                                         {
+                                             if (terrain.resource[i] != LocalResource::None || terrain.ground[i] == LocalGround::Snow)
+                                                 return;
+                                             if (k == 0 && !(terrain.ground[i] == LocalGround::Mud || terrain.soil[i] == SoilType::Peat ||
+                                                             terrain.soil[i] == SoilType::Alluvial || nearRiver[i] >= 96))
+                                                 return;
+                                             ++occurrence.tileCount;
+                                             if (!occurrence.exposed)
+                                                 return;
+                                             terrain.resource[i] = LocalResource::Iron;
+                                             if (k != 0)
+                                             {
+                                                 terrain.ground[i] = LocalGround::Rock;
+                                                 terrain.groundCover[i] = 0;
+                                             } });
+                        if (occurrence.tileCount == 0)
+                            continue;
+                        occurrence.tonnes = occurrence.tileCount * kMinorTonnesPerTile;
+                        map.minerals().push_back(occurrence);
+                    }
+                }
+            }
+        }
+
+        // 5. Trees. Structure: stands from a 300 m grove noise whose threshold falls with world tree cover (sparse
+        //    cover -> copses, dense cover -> closed forest with clearings), small canopy gaps inside forests, and
+        //    riverside woodland even in dry country. Stand age noise makes neighbouring trees similar in size, edges
+        //    younger. Kind: ecological suitability per category, weighted by coherent stand noise.
         void Generator::treePass(SettlementMap &map)
         {
             auto &terrain = map.terrain();
             TreeData &trees = map.trees();
             noise::FractalSampler clearings(deriveSeed(seed, olam::seedId("CLEARING")), {3, 1.0f / 300.0f, 2.0f, 0.5f});
+            const auto coarse = [&](std::uint64_t id, float wavelengthM)
+            {
+                return CoarseNoise(noise::FractalSampler(deriveSeed(seed, id), {2, 1.0f / wavelengthM, 1.93f, 0.5f}), origin, 0, 0,
+                                   width - 1, height - 1, tileM);
+            };
+            const CoarseNoise gaps = coarse(olam::seedId("GAPS"), 70.0f);
+            const CoarseNoise standAge = coarse(olam::seedId("STANDAGE"), 250.0f);
+            const CoarseNoise stands[static_cast<std::size_t>(TreeKind::Count)] = {
+                coarse(olam::seedId("STANDBL"), 180.0f), coarse(olam::seedId("STANDCF"), 180.0f),
+                coarse(olam::seedId("STANDST"), 140.0f), coarse(olam::seedId("STANDRP"), 120.0f),
+                coarse(olam::seedId("STANDWT"), 120.0f)};
             const std::uint64_t treeSeed = deriveSeed(seed, olam::seedId("TREES"));
+            const std::uint64_t kindSeed = deriveSeed(seed, olam::seedId("TREEKIND"));
             for (int y = 0; y < height; ++y)
             {
                 for (int x = 0; x < width; ++x)
@@ -928,20 +1065,161 @@ namespace olam
                     }
                     if (groundFactor <= 0.0f)
                         continue;
-                    // Trees grow in groves: the grove noise threshold falls as world tree cover rises, so sparse
-                    // cover gives scattered copses and dense cover closed forest with clearings.
                     const float cover = static_cast<float>(treeCover[i]) / 255.0f;
                     const float threshold = 0.5f - cover;
                     const float grove = smoothstep(threshold - 0.1f, threshold + 0.1f, clearings.fbm(metersX(x), metersY(y)));
-                    const float density = (0.2f * grove * std::min(1.0f, 4.0f * cover) + 0.08f * static_cast<float>(nearRiver[i]) / 255.0f) *
-                                          groundFactor * (1.0f - smoothstep(0.5f, 0.9f, slopeAtTile(x, y)));
+                    // Canopy gaps (windthrow, old fallen trees) only inside closed stands.
+                    const float gap = 1.0f - 0.75f * grove * smoothstep(0.3f, 0.55f, gaps.at(x, y));
+                    const float closed = grove * std::min(1.0f, 4.0f * cover) * gap;
+                    const float riparian = static_cast<float>(nearRiver[i]) / 255.0f;
+                    const float slope = slopeAtTile(x, y);
+                    canopy[i] = static_cast<std::uint8_t>(std::floor(clamp01(closed + 0.5f * riparian) * 255.0f + 0.5f));
+                    const float density = (0.2f * closed + 0.12f * riparian) * groundFactor * (1.0f - smoothstep(0.5f, 0.9f, slope));
                     const std::uint64_t hash = coordinateHash(treeSeed, origin.x + x, origin.y + y);
                     if (!(unitFromHash(hash, 40) < density))
                         continue;
+
+                    const float age = 0.5f + 0.5f * standAge.at(x, y);
+                    const float maturity = (0.55f * age + 0.45f * unitFromHash(hash, 8)) * (0.55f + 0.45f * grove);
                     terrain.treeId[i] = TreeId::fromIndex(trees.size());
                     trees.x.push_back(static_cast<std::uint16_t>(x));
                     trees.y.push_back(static_cast<std::uint16_t>(y));
-                    trees.growth.push_back(static_cast<std::uint8_t>((hash >> 8) & 0xFFu));
+                    trees.growth.push_back(static_cast<std::uint8_t>(std::floor(clamp01(maturity) * 255.0f + 0.5f)));
+                    trees.kind.push_back(treeKind(map, x, y, grove, slope, stands, coordinateHash(kindSeed, origin.x + x, origin.y + y)));
+                }
+            }
+        }
+
+        TreeKind Generator::treeKind(const SettlementMap &map, int x, int y, float grove, float slope, const CoarseNoise *stands,
+                                     std::uint64_t hash) const
+        {
+            const LocalTerrainData &terrain = map.terrain();
+            const std::size_t i = map.index({x, y});
+            const auto celsius = static_cast<float>(temperature[i]);
+            const float moisture = static_cast<float>(aridity[i]) / 255.0f * 2.0f;
+            const float riparian = static_cast<float>(nearRiver[i]) / 255.0f;
+            const SoilType soil = terrain.soil[i];
+            const Biome b = biome[i];
+            const bool wet = terrain.ground[i] == LocalGround::Mud || soil == SoilType::Peat;
+            const bool richSoil = soil == SoilType::Loam || soil == SoilType::Clay || soil == SoilType::Alluvial;
+            const bool poorSoil = soil == SoilType::Sandy || soil == SoilType::Rocky || soil == SoilType::Permafrost;
+
+            float weights[static_cast<std::size_t>(TreeKind::Count)] = {};
+            // Broadleaf: temperate to tropical, moist, best on rich soils.
+            weights[0] = smoothstep(2.0f, 10.0f, celsius) * smoothstep(0.55f, 1.0f, moisture) * (richSoil ? 1.0f : 0.6f) +
+                         (b == Biome::TemperateForest || b == Biome::TropicalRainforest ? 0.6f : 0.0f);
+            // Conifer: cold, mountain slopes, poor soils, oceanic rainforest; scarce in the hot tropics.
+            weights[1] = ((1.0f - smoothstep(3.0f, 12.0f, celsius)) + 0.6f * smoothstep(0.12f, 0.4f, slope) +
+                          (poorSoil ? 0.3f : 0.0f) +
+                          (b == Biome::BorealForest ? 1.0f : b == Biome::TemperateRainforest || b == Biome::Alpine ? 0.6f
+                                                                                                                   : 0.0f)) *
+                         (1.0f - 0.8f * smoothstep(20.0f, 26.0f, celsius));
+            // Small trees: dry woodland, scrub, savanna, and the edges of stands.
+            weights[2] = ((1.0f - smoothstep(0.55f, 1.1f, moisture)) + 1.4f * (1.0f - grove) * (1.0f - grove) +
+                          (b == Biome::Shrubland || b == Biome::Savanna || b == Biome::TropicalDryForest ? 0.8f : 0.0f)) *
+                         smoothstep(-4.0f, 2.0f, celsius);
+            // Riparian: river and creek banks.
+            weights[3] = 2.5f * riparian * riparian * smoothstep(-3.0f, 3.0f, celsius);
+            // Wetland trees: waterlogged ground only.
+            weights[4] = wet ? 2.0f * smoothstep(-5.0f, 1.0f, celsius) : 0.0f;
+
+            // Stands: each category's own patch noise picks the locally dominant kind; a small per-tree jitter
+            // mixes kinds along stand borders.
+            float best = 0.0f;
+            TreeKind kind = TreeKind::SmallTree;
+            for (std::size_t k = 0; k < static_cast<std::size_t>(TreeKind::Count); ++k)
+            {
+                const float jitter = static_cast<float>((hash >> (k * 12)) & 0xFFFu) / 4096.0f;
+                const float score = weights[k] * (1.0f + 0.85f * stands[k].at(x, y)) * (0.8f + 0.4f * jitter);
+                if (score > best)
+                {
+                    best = score;
+                    kind = static_cast<TreeKind>(k);
+                }
+            }
+            return kind;
+        }
+
+        // 6. Understory: at most one plant or small object per free land tile, chosen from canopy, ground, moisture,
+        //    warmth and water, with patch noise for ferns, meadow grass and flowers. Sparse list, row-major.
+        void Generator::understoryPass(SettlementMap &map)
+        {
+            const LocalTerrainData &terrain = map.terrain();
+            UnderstoryData &understory = map.understory();
+            const auto coarse = [&](std::uint64_t id, float wavelengthM)
+            {
+                return CoarseNoise(noise::FractalSampler(deriveSeed(seed, id), {2, 1.0f / wavelengthM, 1.93f, 0.5f}), origin, 0, 0,
+                                   width - 1, height - 1, tileM);
+            };
+            const CoarseNoise fernPatches = coarse(olam::seedId("FERNS"), 50.0f);
+            const CoarseNoise meadowPatches = coarse(olam::seedId("MEADOW"), 60.0f);
+            const CoarseNoise flowerPatches = coarse(olam::seedId("FLOWERS"), 35.0f);
+            const std::uint64_t understorySeed = deriveSeed(seed, olam::seedId("UNDRSTRY"));
+            constexpr std::size_t kKinds = static_cast<std::size_t>(UnderstoryKind::Count);
+
+            for (int y = 0; y < height; ++y)
+            {
+                for (int x = 0; x < width; ++x)
+                {
+                    const std::size_t i = map.index({x, y});
+                    if (terrain.water[i] != LocalWater::None || terrain.treeId[i].isValid())
+                        continue;
+                    const LocalResource resource = terrain.resource[i];
+                    const LocalGround ground = terrain.ground[i];
+                    if (ground == LocalGround::Snow || (resource != LocalResource::None && resource != LocalResource::Stone))
+                        continue;
+                    const SoilType soil = terrain.soil[i];
+                    const float shade = static_cast<float>(canopy[i]) / 255.0f;
+                    const float open = 1.0f - shade;
+                    const float edge = 4.0f * shade * open;
+                    const float cover = static_cast<float>(terrain.groundCover[i]) / 255.0f;
+                    const auto celsius = static_cast<float>(temperature[i]);
+                    const float moisture = static_cast<float>(aridity[i]) / 255.0f * 2.0f;
+                    const float warm = smoothstep(-4.0f, 2.0f, celsius);
+                    const bool vegetated = ground == LocalGround::Grass || ground == LocalGround::Dirt || ground == LocalGround::Mud;
+                    const bool rocky = ground == LocalGround::Rock || ground == LocalGround::Gravel || soil == SoilType::Rocky ||
+                                       resource == LocalResource::Stone;
+                    const bool wet = ground == LocalGround::Mud || soil == SoilType::Peat || nearRiver[i] >= 200;
+                    const Biome b = biome[i];
+                    const bool scrubland = b == Biome::Shrubland || b == Biome::Savanna || b == Biome::TropicalDryForest;
+
+                    // Upper bounds first (patch factors <= 1), so most tiles need no noise lookups.
+                    float p[kKinds] = {};
+                    if (vegetated && resource == LocalResource::None)
+                    {
+                        p[0] = (0.06f * edge + (scrubland ? 0.025f : 0.0f) + 0.008f * shade) * warm;
+                        p[1] = (0.02f * edge + 0.008f * shade) * warm;
+                        p[2] = ground == LocalGround::Grass ? 0.05f * cover * open : 0.0f;
+                        p[3] = ground == LocalGround::Grass && celsius > 2.0f ? 0.018f * cover * open * smoothstep(0.5f, 0.9f, moisture) : 0.0f;
+                        p[4] = 0.06f * smoothstep(0.4f, 0.8f, shade) * smoothstep(0.85f, 1.2f, moisture) * smoothstep(0.0f, 5.0f, celsius) *
+                               (1.0f - smoothstep(22.0f, 28.0f, celsius));
+                        p[5] = wet ? 0.12f * warm : 0.0f;
+                        p[6] = 0.005f * smoothstep(0.4f, 0.8f, shade);
+                    }
+                    p[7] = rocky ? 0.025f : 0.004f * smoothstep(0.15f, 0.4f, slopeAtTile(x, y));
+                    float bound = 0.0f;
+                    for (const float v : p)
+                        bound += v;
+                    const std::uint64_t hash = coordinateHash(understorySeed, origin.x + x, origin.y + y);
+                    const float roll = unitFromHash(hash, 0);
+                    if (!(roll < bound))
+                        continue;
+
+                    p[2] *= smoothstep(-0.2f, 0.4f, meadowPatches.at(x, y));
+                    p[3] *= smoothstep(0.0f, 0.5f, flowerPatches.at(x, y));
+                    p[4] *= smoothstep(-0.3f, 0.3f, fernPatches.at(x, y));
+                    float pick = roll;
+                    for (std::size_t k = 0; k < kKinds; ++k)
+                    {
+                        if (pick < p[k])
+                        {
+                            understory.x.push_back(static_cast<std::uint16_t>(x));
+                            understory.y.push_back(static_cast<std::uint16_t>(y));
+                            understory.kind.push_back(static_cast<UnderstoryKind>(k));
+                            break;
+                        }
+                        pick -= p[k];
+                    }
                 }
             }
         }
@@ -992,12 +1270,14 @@ namespace olam
                             Layer<std::uint8_t>(width, height, 0),
                             Layer<std::uint8_t>(width, height, 0),
                             Layer<std::uint8_t>(width, height, 0),
-                            Layer<Biome>(width, height, Biome::None)};
+                            Layer<Biome>(width, height, Biome::None),
+                            Layer<std::uint8_t>(width, height, 0)};
         generator.terrainPass(*map);
         generator.riverPass();
         generator.groundPass(*map);
         generator.resourcePass(*map);
         generator.treePass(*map);
+        generator.understoryPass(*map);
         return {std::move(map), {}};
     }
 

@@ -28,4 +28,17 @@ namespace olam
     // Requires the soil layer.
     LocalMaterials localMaterialsAt(const World &world, WorldCoord coord);
 
+    // Likelihood 0..1 of small, low-grade iron occurrences per setting (not deposits; those are strategic), and the
+    // share 0..1 of ironstone / iron-rich rock that is exposed rather than buried under soil and sediment.
+    struct MinorIronPotential
+    {
+        float bog = 0.0f;
+        float ironstone = 0.0f;
+        float weathered = 0.0f;
+        float exposure = 0.0f;
+    };
+
+    // Requires the soil and biome layers; uses world iron deposits nearby when present.
+    MinorIronPotential minorIronPotentialAt(const World &world, WorldCoord coord);
+
 } // namespace olam

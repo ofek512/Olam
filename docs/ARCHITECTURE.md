@@ -39,8 +39,9 @@ olam_worldgen + olam_settlement_views ──> olam_generate (src/tools/generate,
 - `olam_world_viewer`: world debug visualization and tile inspector.
 - `olam_settlement`: local settlement maps (`SettlementMap`, site checks, `generateLocalMap`). Depends on
   `olam_world` only: it reads a generated `World`, never runs world generation, and has no SDL.
-- `olam_settlement_views`: SDL-free local map colouring and tile inspector (viewer and headless PNG output).
-- `olam_settlement_viewer`: SDL texture renderer for local maps.
+- `olam_settlement_views`: SDL-free local map colouring, tile inspector, procedural sprite atlas and visible-sprite
+  collection (viewer and headless PNG output).
+- `olam_settlement_viewer`: SDL renderer for local maps.
 - `Olam`: composes systems; contains no world logic.
 - `olam_generate`: headless generation (`--seed`, `--size`, `--save`, `--png`, `--local`) printing per-pass timings,
   stats and the world hash; used for profiling and on machines without a display.
@@ -74,10 +75,37 @@ Tests: one executable per library (`olam_core_tests`, `olam_world_tests`, `olam_
   of the world, its seed and the absolute position. Overlapping maps of neighbouring sites are therefore identical
   where they overlap (seamless), and a map can always be regenerated instead of saved (4A does not save maps).
 - Layers are struct-of-arrays like the world: elevation (int16 dm relative to a base), water, ground, soil,
-  fertility, ground cover, resource and a per-tile tree index. Trees are individual entities in a compact list.
+  fertility, ground cover, resource and a per-tile tree index. Trees (position, growth, `TreeKind`) are
+  individual entities in a compact list; understory plants and small objects (`UnderstoryData`) and mineral
+  occurrences are sparse lists without per-tile layers (`SettlementMap::understoryAt` binary-searches).
 - Sites: any land tile far enough from the world edge (`siteError`); harsh sites only produce warnings
   (`siteWarnings`). The app holds one active settlement; founding elsewhere replaces it, a new world drops it.
 - Generation details: [WORLD_GENERATION.md](WORLD_GENERATION.md#local-maps-phase-4a).
+
+### Local map rendering (Phase 4A.5B)
+
+One terrain representation, shown differently by zoom (screen px per tile, thresholds in `LocalSprites.h`):
+
+| Zoom   | Look                                                                                         |
+| ------ | -------------------------------------------------------------------------------------------- |
+| < 1    | Natural overview: the view texture box-filtered 4x (`downsampleRgba`), bilinear              |
+| 1 - 10 | View texture, 1 texel = 1 tile, nearest; tree crowns and rocks fade in over 3 - 4.5          |
+| >= 6   | Tree shadows; understory (shrubs, ferns, grass, flowers, rushes, logs, small rocks) fades in |
+| >= 10  | Pixel-art ground: a 16 px pattern per tile tinted by the tile colour, fading in over 10 - 14 |
+| >= 12  | Sprites switch from bilinear to nearest (crisp pixel art, snapped to whole screen pixels)    |
+
+- Base textures are built once per map / view change (never per frame). Object sprites exist only per frame,
+  for the visible tiles plus a 4-tile margin (crowns reach beyond their anchor tile); nothing is allocated per
+  tree. `collectLocalSprites` (SDL-free, tested) emits back-to-front instances: ground, shadows, then rocks and
+  crowns row by row (trees are stored row-major, so the visible rows are one index range).
+- Sprites come from one procedural greyscale atlas (`buildLocalSpriteAtlas`, no external images) at
+  16 px per tile, tinted per instance; one `SpriteBatch` draw call (`SDL_RenderGeometryRaw`) per frame.
+- Variation (crown shape per `TreeKind`, size class from growth and kind, shape variant, mirroring, hue,
+  position jitter) hashes the global local coordinate, so overlapping maps look identical. Dry ground tints
+  crowns olive. The base texture colours tree tiles by kind, so far zoom shows forest types.
+- Only the Terrain view gets sprites; debug views stay flat textures.
+- Headless check: `olam_generate --local <site> --local-zoom <px> [--local-crop x,y] --png f` renders the same
+  composition on the CPU (960 x 540).
 
 ## World ownership
 

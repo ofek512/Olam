@@ -36,8 +36,22 @@ namespace olam
         lines.push_back(std::format("Soil: {}   fertility {}%", toString(terrain.soil[i]), terrain.fertility[i] * 100 / 255));
         if (terrain.resource[i] != LocalResource::None)
             lines.push_back(std::format("Resource: {}", toString(terrain.resource[i])));
+        for (const MineralOccurrence &m : map.minerals())
+        {
+            const float dx = static_cast<float>(coord.x) + 0.5f - m.centerX;
+            const float dy = static_cast<float>(coord.y) + 0.5f - m.centerY;
+            const bool covers = m.exposed ? terrain.resource[i] == m.mineral : dx * dx + dy * dy <= m.radius * m.radius;
+            if (!covers || dx * dx + dy * dy > 2.25f * m.radius * m.radius)
+                continue;
+            lines.push_back(std::format("{}{} ({})   grade {}   {} t in {} tiles", m.exposed ? "" : "Buried ",
+                                        toString(m.mineral), toString(m.source), m.grade, m.tonnes, m.tileCount));
+            break;
+        }
         if (const TreeId tree = terrain.treeId[i]; tree.isValid())
-            lines.push_back(std::format("Tree #{}   growth {}%", tree.index(), map.trees().growth[tree.index()] * 100 / 255));
+            lines.push_back(std::format("Tree #{}: {}   growth {}%", tree.index(), toString(map.trees().kind[tree.index()]),
+                                        map.trees().growth[tree.index()] * 100 / 255));
+        if (const auto u = map.understoryAt(coord))
+            lines.push_back(std::format("Understory: {}", toString(map.understory().kind[*u])));
         return lines;
     }
 

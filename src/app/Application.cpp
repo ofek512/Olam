@@ -541,6 +541,8 @@ namespace olam
             std::format("View: {}{}", localViewInfo(m_localView).name, m_localHillshade ? "  (hillshade)" : ""),
             std::format("Camera ({:.1f}, {:.1f})   zoom {:.2f} px/tile", m_localCamera.position().x,
                         m_localCamera.position().y, m_localCamera.zoom()),
+            std::format("Sprites {}   built in {:.2f} ms", m_settlementRenderer->spriteCount(),
+                        m_settlementRenderer->spriteMilliseconds()),
         };
         for (const std::string &warning : m_siteWarnings)
             lines.push_back("! " + warning);

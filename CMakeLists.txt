@@ -140,6 +140,7 @@ target_link_libraries(olam_settlement
 # Colouring and inspection of local maps (no SDL): shared by the viewer and headless PNG output.
 add_library(olam_settlement_views STATIC
     src/tools/settlement_viewer/LocalViews.cpp
+    src/tools/settlement_viewer/LocalSprites.cpp
     src/tools/settlement_viewer/LocalTileInspector.cpp
 )
 target_link_libraries(olam_settlement_views

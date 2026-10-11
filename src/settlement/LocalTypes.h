@@ -63,6 +63,53 @@ namespace olam
 
     std::string_view toString(LocalResource resource);
 
+    // Where a local mineral occurrence comes from.
+    enum class MineralSource : std::uint8_t
+    {
+        // Outcrop of a strategic world deposit: large, high grade.
+        WorldDeposit,
+        // Minor occurrences: small and low grade, enough for modest early metallurgy.
+        BogIron,
+        Ironstone,
+        WeatheredRock,
+        Count,
+    };
+
+    std::string_view toString(MineralSource source);
+
+    // Broad ecological tree categories; species come later.
+    enum class TreeKind : std::uint8_t
+    {
+        Broadleaf,
+        Conifer,
+        // Low trees of dry woodland, scrub and forest edges.
+        SmallTree,
+        // Willows / alders along rivers and creeks.
+        Riparian,
+        // Trees of waterlogged ground.
+        WetlandTree,
+        Count,
+    };
+
+    std::string_view toString(TreeKind kind);
+
+    // Understory plants and small natural objects.
+    enum class UnderstoryKind : std::uint8_t
+    {
+        Shrub,
+        Bush,
+        TallGrass,
+        Flowers,
+        Fern,
+        // Rushes and sedges of wet ground.
+        WetlandPlants,
+        FallenLog,
+        SmallRock,
+        Count,
+    };
+
+    std::string_view toString(UnderstoryKind kind);
+
     struct TreeTag;
     using TreeId = StrongId<TreeTag>;
 

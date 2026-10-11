@@ -26,6 +26,26 @@ namespace olam
         return {static_cast<std::int32_t>(index % w), static_cast<std::int32_t>(index / w)};
     }
 
+    std::optional<std::size_t> SettlementMap::understoryAt(LocalCoord coord) const
+    {
+        const auto key = [](std::uint16_t x, std::uint16_t y)
+        { return (static_cast<std::uint32_t>(y) << 16) | x; };
+        const std::uint32_t target = key(static_cast<std::uint16_t>(coord.x), static_cast<std::uint16_t>(coord.y));
+        std::size_t low = 0;
+        std::size_t high = m_understory.size();
+        while (low < high)
+        {
+            const std::size_t mid = (low + high) / 2;
+            if (key(m_understory.x[mid], m_understory.y[mid]) < target)
+                low = mid + 1;
+            else
+                high = mid;
+        }
+        if (low < m_understory.size() && key(m_understory.x[low], m_understory.y[low]) == target)
+            return low;
+        return std::nullopt;
+    }
+
     std::uint64_t hashSettlementMap(const SettlementMap &map)
     {
         ByteWriter writer;
@@ -57,6 +77,30 @@ namespace olam
             writer.write(trees.x[t]);
             writer.write(trees.y[t]);
             writer.write(trees.growth[t]);
+            writer.write(trees.kind[t]);
+        }
+
+        const UnderstoryData &understory = map.understory();
+        writer.write(static_cast<std::uint64_t>(understory.size()));
+        for (std::size_t u = 0; u < understory.size(); ++u)
+        {
+            writer.write(understory.x[u]);
+            writer.write(understory.y[u]);
+            writer.write(understory.kind[u]);
+        }
+
+        writer.write(static_cast<std::uint64_t>(map.minerals().size()));
+        for (const MineralOccurrence &m : map.minerals())
+        {
+            writer.write(static_cast<std::uint8_t>(m.mineral));
+            writer.write(static_cast<std::uint8_t>(m.source));
+            writer.write(static_cast<std::uint8_t>(m.exposed ? 1 : 0));
+            writer.write(m.grade);
+            writer.write(m.centerX);
+            writer.write(m.centerY);
+            writer.write(m.radius);
+            writer.write(m.tileCount);
+            writer.write(m.tonnes);
         }
         return writer.hash();
     }

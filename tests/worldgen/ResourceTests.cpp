@@ -5,6 +5,7 @@
 #include "world/queries/ResourceQueries.h"
 #include "world/queries/TerrainQueries.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <vector>
 
@@ -163,6 +164,46 @@ OLAM_TEST(local_materials_in_range)
     }
     // Basic building materials exist almost everywhere.
     OLAM_CHECK(land > 0 && stone / static_cast<double>(land) > 0.25 && clay / static_cast<double>(land) > 0.2);
+}
+
+OLAM_TEST(minor_iron_potential_follows_geology)
+{
+    const auto world = test::generateWorld(42);
+    OLAM_CHECK(world != nullptr);
+    if (!world)
+        return;
+    std::size_t land = 0;
+    std::size_t withPotential = 0;
+    std::size_t without = 0;
+    for (int y = 0; y < world->height(); y += 2)
+    {
+        for (int x = 0; x < world->width(); x += 2)
+        {
+            const std::size_t i = world->index({x, y});
+            const MinorIronPotential p = minorIronPotentialAt(*world, {x, y});
+            OLAM_CHECK(p.bog >= 0.0f && p.bog <= 1.0f && p.ironstone >= 0.0f && p.ironstone <= 1.0f &&
+                       p.weathered >= 0.0f && p.weathered <= 1.0f && p.exposure >= 0.0f && p.exposure <= 1.0f);
+            if (world->hydrology().surfaceWater[i] != SurfaceWater::Land)
+            {
+                OLAM_CHECK(p.bog == 0.0f && p.ironstone == 0.0f && p.weathered == 0.0f);
+                continue;
+            }
+            // Ironstone only in sedimentary rock; bog iron never in hot or frozen ground.
+            if (world->terrain().rockType[i] != RockType::Sedimentary)
+                OLAM_CHECK(p.ironstone == 0.0f);
+            const float celsius = static_cast<float>(world->climate().meanAnnualTemperature[i]) / 10.0f;
+            if (celsius <= -6.0f || celsius >= 24.0f)
+                OLAM_CHECK(p.bog == 0.0f);
+            ++land;
+            const float best = std::max({p.bog, p.ironstone, p.weathered});
+            withPotential += best >= 0.2f ? 1u : 0u;
+            without += best < 0.05f ? 1u : 0u;
+        }
+    }
+    std::printf("  minor iron potential >= 0.2 on %.2f of land, < 0.05 on %.2f\n",
+                static_cast<double>(withPotential) / static_cast<double>(land), static_cast<double>(without) / static_cast<double>(land));
+    // Small iron is possible on most land; poor districts come from the local map's regional noise.
+    OLAM_CHECK(land > 0 && withPotential * 2 > land);
 }
 
 OLAM_TEST(biological_yields_in_range)

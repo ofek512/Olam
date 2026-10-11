@@ -268,12 +268,40 @@ overlap. Passes, in order:
 3. **Ground**: snow (cold, noisy snow line), rock (steep), beach sand, desert sand/gravel, mud (wetlands, flat
    wet banks), otherwise grass (dirt when sparse); riparian strips stay green in dry country. Ground cover and
    fertility follow world moisture and fertility, slope and river banks; flat banks get alluvial soil.
-4. **Resources**: ore outcrop patches around each world deposit tile (count and size by richness), stone
-   outcrops (more where `localMaterialsAt` reports stone, and on all rock), clay pits on flat clay-rich ground and
-   near rivers.
+4. **Resources**: ore outcrop patches around each world deposit tile (count and size by richness), minor iron
+   occurrences, stone outcrops (more where `localMaterialsAt` reports stone, and on all rock), clay pits on flat
+   clay-rich ground and near rivers. Every ore patch is also listed in `SettlementMap::minerals()`
+   (`MineralOccurrence`: source, exposed/buried, grade 1-100, tiles, tonnes); buried patches are not in the
+   resource layer (found later by prospecting).
+   - Three tiers: common materials (stone, clay: nearly everywhere), **minor iron** (small, low grade, common),
+     **strategic deposits** (world `ResourcePass`, unchanged: rare, large, rich). A 6 km local map overlaps a
+     world deposit only ~5 % of the time, so without minor iron almost no site had any iron.
+   - Minor iron: `minorIronPotentialAt` (world query, not stored) rates bog iron (wetland, peat, lake shores,
+     wet floodplains; -6..24 °C), ironstone (sedimentary rock, basins best) and iron-rich weathered rock
+     (shield/orogen/rift crystalline rock; laterite crusts) and how exposed rock is (hills vs. buried
+     floodplains/dunes); x1.5 within 2 world tiles of a world iron deposit. One candidate per
+     setting per 500 m cell of the global grid, accepted with chance potential x {8, 4, 4} % x 25 km regional
+     noise (poor districts exist); bog iron only on wet tiles. Exposed patches 4-10 m, buried 8-20 m; grade
+     10-35 (deposits 25-100); 30 t ore per tile vs. 150 t for deposits.
+   - Calibrated with `olam_generate --size 1024x1024 --mineral-survey 6` (seeds 100-105, 60 viable sites:
+     fertility >= 30 %, no ice/tundra/alpine/desert): stone 100 %, clay 85 %, minor iron 80 % (surface 60 %),
+     no iron 20 %; minor iron ~6.6 kt/site at grade ~20 vs. 25-460 kt at grade 17-47 where a deposit is on the
+     map (2-11 %); a world iron deposit within 30 km of ~50 % of sites.
 5. **Trees**: individual trees placed by `coordinateHash` with density from world tree cover in noise groves
-   (sparse cover -> copses, dense cover -> closed forest with clearings), extra trees along rivers; at most ~500
-   trees/ha.
+   (sparse cover -> copses, dense cover -> closed forest with clearings), 70 m canopy gaps inside closed stands,
+   riverside woodland along banks even in dry country; at most ~500 trees/ha. Growth follows a 250 m stand-age
+   noise (neighbours similar), edges younger. `TreeKind` by ecological suitability, then the highest
+   suitability x stand noise (120-180 m, one per kind) x small per-tree jitter, so kinds form stands with mixed
+   borders:
+   - Broadleaf: >= ~5 °C, moist, rich soils; temperate / tropical forest biomes.
+   - Conifer: cold, steep slopes, poor soils, boreal / temperate rainforest / alpine; rare above ~22 °C.
+   - Small tree: dry woodland, scrub, savanna, open copses and stand edges.
+   - Riparian: river and creek banks. Wetland tree: mud and peat only.
+6. **Understory** (`UnderstoryData`, sparse row-major list, <= 1 per tile, never on tree or water tiles):
+   chance per kind from stand closure (`canopy` scratch layer of the tree pass), ground, cover, moisture,
+   warmth and water; ferns, meadow grass and flowers in patches. Shrubs and bushes peak at stand edges, ferns
+   and fallen logs under closed canopy, tall grass and flowers in open grass, rushes and sedges on mud, peat and
+   banks, small rocks on rocky ground and slopes. Typical default map: 0.04-0.35 M objects (< 2 MB).
 
 Budget: <= 5 s in Release (measured 3-4.5 s). `olam_generate --local <x,y | river|coast|lake|forest|plain|
 mountain|dry> --png file` picks a matching site nearest the world centre and writes the Terrain view at 1:4

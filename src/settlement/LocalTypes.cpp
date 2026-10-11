@@ -77,4 +77,68 @@ namespace olam
         return "?";
     }
 
+    std::string_view toString(MineralSource source)
+    {
+        switch (source)
+        {
+        case MineralSource::WorldDeposit:
+            return "Major deposit";
+        case MineralSource::BogIron:
+            return "Bog iron";
+        case MineralSource::Ironstone:
+            return "Ironstone";
+        case MineralSource::WeatheredRock:
+            return "Iron-rich rock";
+        case MineralSource::Count:
+            break;
+        }
+        return "?";
+    }
+
+    std::string_view toString(TreeKind kind)
+    {
+        switch (kind)
+        {
+        case TreeKind::Broadleaf:
+            return "Broadleaf";
+        case TreeKind::Conifer:
+            return "Conifer";
+        case TreeKind::SmallTree:
+            return "Small tree";
+        case TreeKind::Riparian:
+            return "Riparian";
+        case TreeKind::WetlandTree:
+            return "Wetland tree";
+        case TreeKind::Count:
+            break;
+        }
+        return "?";
+    }
+
+    std::string_view toString(UnderstoryKind kind)
+    {
+        switch (kind)
+        {
+        case UnderstoryKind::Shrub:
+            return "Shrub";
+        case UnderstoryKind::Bush:
+            return "Bush";
+        case UnderstoryKind::TallGrass:
+            return "Tall grass";
+        case UnderstoryKind::Flowers:
+            return "Flowers";
+        case UnderstoryKind::Fern:
+            return "Ferns";
+        case UnderstoryKind::WetlandPlants:
+            return "Rushes and sedges";
+        case UnderstoryKind::FallenLog:
+            return "Fallen log";
+        case UnderstoryKind::SmallRock:
+            return "Small rock";
+        case UnderstoryKind::Count:
+            break;
+        }
+        return "?";
+    }
+
 } // namespace olam
