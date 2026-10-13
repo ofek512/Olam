@@ -132,6 +132,8 @@ add_library(olam_settlement STATIC
     src/settlement/SiteSelection.cpp
     src/settlement/LocalMapGenerator.cpp
     src/settlement/ResourceState.cpp
+    src/settlement/Construction.cpp
+    src/settlement/ConstructionState.cpp
 )
 target_link_libraries(olam_settlement
     PUBLIC olam_world
@@ -143,6 +145,8 @@ add_library(olam_settlement_views STATIC
     src/tools/settlement_viewer/LocalViews.cpp
     src/tools/settlement_viewer/LocalSprites.cpp
     src/tools/settlement_viewer/LocalTileInspector.cpp
+    src/tools/settlement_viewer/ConstructionTool.cpp
+    src/tools/settlement_viewer/ConstructionViews.cpp
 )
 target_link_libraries(olam_settlement_views
     PUBLIC olam_settlement

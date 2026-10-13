@@ -59,7 +59,11 @@ Short status checklist. Full vision and rationale: [agent.MD](../agent.MD).
   - [x] 4A.5F Resource inspection and test harvesting (`ResourceState`, G / Shift+G / Y, Vegetation / Forage /
         Minerals views; river courses reworked)
   - [ ] 4A.5G Testing, performance and balancing
-- [ ] 4B First buildings
+- [ ] 4B First buildings (plan: [4BPlan.md](../4BPlan.md))
+  - [x] 4B.1 Construction grid and structural placement (edge walls, doors, floors; `ConstructionState`,
+        `ConstructionTool`; B build mode, 1-4 tools, Q/E material, R flip door, Shift clears obstructions)
+  - [x] 4B.2 Blueprints and construction orders (`ConstructionOrder`, derived order stage, debug deliver /
+        complete; I instant build, Ctrl+LMB select order, Enter confirm, V deliver, C complete, X cancel)
 - [ ] 4C First population
 - [ ] 4D First economy
 - [ ] 4E Immigration and growth

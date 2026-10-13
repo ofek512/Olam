@@ -51,6 +51,17 @@ namespace olam
         F12,
         G,
         Y,
+        // Construction tools (local map).
+        Num1,
+        Num2,
+        Num3,
+        Num4,
+        B,
+        Q,
+        E,
+        X,
+        C,
+        V,
         Count,
     };
 

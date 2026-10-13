@@ -247,7 +247,10 @@ namespace olam
             {
                 const UnderstoryData &understory = map.understory();
                 for (std::size_t u = 0; u < understory.size(); ++u)
-                    write(rgba, map.index({understory.x[u], understory.y[u]}), kUnderstoryColors[static_cast<std::size_t>(understory.kind[u])]);
+                {
+                    if (!(state && state->understoryCleared(map, u)))
+                        write(rgba, map.index({understory.x[u], understory.y[u]}), kUnderstoryColors[static_cast<std::size_t>(understory.kind[u])]);
+                }
             }
             else if (view == LocalView::Forage)
             {

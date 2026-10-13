@@ -1,5 +1,6 @@
 #include "tools/settlement_viewer/LocalTileInspector.h"
 
+#include "settlement/ConstructionState.h"
 #include "settlement/ResourceState.h"
 #include "settlement/SettlementMap.h"
 
@@ -38,9 +39,41 @@ namespace olam
             }
         }
 
+        std::string describeStructure(const Structure &s)
+        {
+            std::string text = std::format("{} ({}", toString(s.material), toString(s.stage));
+            if (s.stage == ConstructionStage::UnderConstruction)
+                text += std::format(" {}/{}", s.workDone, structureProperties(s.kind, s.material).workRequired);
+            if (s.order.isValid())
+                text += std::format(", order #{}", s.order.value);
+            return text + ")";
+        }
+
+        void describeConstruction(const ConstructionState &construction, LocalCoord coord, std::vector<std::string> &lines)
+        {
+            if (const Structure *floor = construction.structure(construction.floorAt(coord)))
+                lines.push_back("Floor: " + describeStructure(*floor));
+            constexpr const char *kSides[] = {"N", "E", "S", "W"};
+            const auto edges = tileEdges(coord);
+            for (std::size_t side = 0; side < edges.size(); ++side)
+            {
+                const Structure *s = construction.structure(construction.edgeAt(edges[side]));
+                if (!s)
+                    continue;
+                std::string swing;
+                if (s->kind == StructureKind::Door)
+                {
+                    const bool towardsFirst = s->flipped;
+                    swing = s->axis == EdgeAxis::North ? (towardsFirst ? ", opens N" : ", opens S") : (towardsFirst ? ", opens W" : ", opens E");
+                }
+                lines.push_back(std::format("{} {}: {}{}", kSides[side], toString(s->kind), describeStructure(*s), swing));
+            }
+        }
+
     } // namespace
 
-    std::vector<std::string> describeLocalTile(const SettlementMap &map, Vec2 mapPosition, bool pinned, const ResourceState *state)
+    std::vector<std::string> describeLocalTile(const SettlementMap &map, Vec2 mapPosition, bool pinned, const ResourceState *state,
+                                               const ConstructionState *construction)
     {
         const LocalCoord coord{static_cast<std::int32_t>(std::floor(mapPosition.x)),
                                static_cast<std::int32_t>(std::floor(mapPosition.y))};
@@ -58,6 +91,8 @@ namespace olam
         lines.push_back(std::format("Tile ({}, {})   {:.0f} x {:.0f} m from NW corner", coord.x, coord.y, coord.x * tileM,
                                     coord.y * tileM));
         lines.push_back(std::format("Elevation {:.1f} m", map.elevationMeters(i)));
+        if (construction)
+            describeConstruction(*construction, coord, lines);
         if (terrain.water[i] != LocalWater::None)
         {
             lines.push_back(std::format("Water: {}", toString(terrain.water[i])));
@@ -92,7 +127,8 @@ namespace olam
                                             map.trees().growth[t] * 100 / 255, wood));
         }
         if (const auto u = map.understoryAt(coord))
-            lines.push_back(std::format("Understory: {}", toString(map.understory().kind[*u])));
+            lines.push_back(std::format("Understory: {}{}", toString(map.understory().kind[*u]),
+                                        state && state->understoryCleared(map, *u) ? " (cleared)" : ""));
         describeForage(map, coord, lines, state);
         return lines;
     }

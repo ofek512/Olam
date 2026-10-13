@@ -14,7 +14,8 @@ namespace olam
     {
 
         constexpr std::uint32_t kMagic = 0x53524C4F; // "OLRS"
-        constexpr std::uint32_t kVersion = 1;
+        // Version 1 had no cleared understory; it still loads.
+        constexpr std::uint32_t kVersion = 2;
 
         std::uint32_t tileKey(std::uint16_t x, std::uint16_t y) { return (static_cast<std::uint32_t>(y) << 16) | x; }
 
@@ -63,6 +64,21 @@ namespace olam
         return treeWoodKg(trees.kind[t], trees.growth[t]);
     }
 
+    bool ResourceState::understoryCleared(const SettlementMap &map, std::size_t u) const
+    {
+        const UnderstoryData &understory = map.understory();
+        return m_clearedUnderstory.contains(tileKey(understory.x[u], understory.y[u]));
+    }
+
+    bool ResourceState::clearUnderstory(const SettlementMap &map, std::size_t u)
+    {
+        const UnderstoryData &understory = map.understory();
+        if (!m_clearedUnderstory.insert(tileKey(understory.x[u], understory.y[u])).second)
+            return false;
+        ++m_revision;
+        return true;
+    }
+
     void ResourceState::regrow(const SettlementMap &map, float years)
     {
         if (years <= 0.0f || m_forageTaken.empty())
@@ -99,6 +115,9 @@ namespace olam
         writer.write(static_cast<std::uint32_t>(m_felledTrees.size()));
         for (const std::uint32_t key : m_felledTrees)
             writer.write(key);
+        writer.write(static_cast<std::uint32_t>(m_clearedUnderstory.size()));
+        for (const std::uint32_t key : m_clearedUnderstory)
+            writer.write(key);
         return writer.takeBytes();
     }
 
@@ -116,13 +135,14 @@ namespace olam
         reader.read(site.y);
         if (reader.failed() || magic != kMagic)
             return "not a resource state";
-        if (version != kVersion)
+        if (version < 1 || version > kVersion)
             return "unsupported resource state version " + std::to_string(version);
         if (worldSeed != map.worldSeed() || !(site == map.site()))
             return "resource state belongs to another settlement";
 
         std::map<std::uint32_t, float> forage;
         std::set<std::uint32_t> felled;
+        std::set<std::uint32_t> cleared;
         std::uint32_t count = 0;
         reader.read(count);
         for (std::uint32_t i = 0; i < count && !reader.failed(); ++i)
@@ -142,10 +162,21 @@ namespace olam
             reader.read(key);
             felled.insert(key);
         }
+        if (version >= 2)
+        {
+            reader.read(count);
+            for (std::uint32_t i = 0; i < count && !reader.failed(); ++i)
+            {
+                std::uint32_t key = 0;
+                reader.read(key);
+                cleared.insert(key);
+            }
+        }
         if (reader.failed())
             return "truncated resource state";
         m_forageTaken = std::move(forage);
         m_felledTrees = std::move(felled);
+        m_clearedUnderstory = std::move(cleared);
         ++m_revision;
         return std::nullopt;
     }

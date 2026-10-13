@@ -960,6 +960,7 @@ namespace olam
         const bool anyFelled = state && state->felledTreeCount() > 0;
         const auto felled = [&](std::size_t t)
         { return anyFelled && state->treeFelled(map, TreeId::fromIndex(t)); };
+        const bool anyCleared = state && state->clearedUnderstoryCount() > 0;
         const float understoryAlpha = objectAlpha * smoothstep(kUnderstoryFromZoom, kUnderstoryFromZoom * 1.5f, zoom);
         std::size_t u = understoryAlpha > 0.0f ? rowStart(understory.y, oy0) : understory.size();
         const std::size_t uLast = understoryAlpha > 0.0f ? rowStart(understory.y, oy1) : understory.size();
@@ -991,7 +992,7 @@ namespace olam
             }
             for (; u < uLast && understory.y[u] == y; ++u)
             {
-                if (understory.x[u] >= ox0 && understory.x[u] < ox1)
+                if (understory.x[u] >= ox0 && understory.x[u] < ox1 && !(anyCleared && state->understoryCleared(map, u)))
                     out.push_back(placement.understory(u, understoryAlpha));
             }
             for (; f < fLast && forage.y[f] == y; ++f)

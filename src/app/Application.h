@@ -5,9 +5,11 @@
 #include "core/time/SimulationClock.h"
 #include "platform/sdl/SdlPlatform.h"
 #include "render/camera/Camera2D.h"
+#include "settlement/ConstructionState.h"
 #include "settlement/LocalTypes.h"
 #include "settlement/ResourceState.h"
 #include "settlement/SettlementConfig.h"
+#include "tools/settlement_viewer/ConstructionTool.h"
 #include "tools/settlement_viewer/LocalViews.h"
 #include "tools/world_viewer/WorldViews.h"
 #include "world/World.h"
@@ -65,6 +67,8 @@ namespace olam
         void processInput();
         void processWorldInput();
         void processLocalInput();
+        // Construction tools while build mode is on (B).
+        void processBuildInput();
         void update(double deltaTime);
         void simulationTick();
         void render();
@@ -81,6 +85,14 @@ namespace olam
         void foundSettlement();
         // Developer test harvest on the pinned, else hovered, local tile: gather forage (all with `all`) or fell a tree.
         void testHarvest(bool all);
+        // Mouse position on the local map, in tiles.
+        Vec2 localMouse() const;
+        // How the build tools place: blueprints, or instant developer building (Shift clears obstructions).
+        PlacementOptions buildOptions() const;
+        // Construction order of the wall, door or floor under the mouse.
+        OrderId orderUnderMouse() const;
+        // Developer lifecycle keys on the selected order: confirm, deliver, complete, cancel.
+        void processOrderInput();
         void setStatus(std::string message);
         void drawOverlay();
         void drawLocalOverlay();
@@ -114,6 +126,14 @@ namespace olam
         ResourceState m_resourceState;
         std::array<float, static_cast<std::size_t>(ForageKind::Count)> m_gatheredKg{};
         float m_woodKg = 0.0f;
+        // Structures of the active settlement and the developer construction tools.
+        ConstructionState m_construction;
+        ConstructionTool m_buildTool;
+        bool m_buildMode = false;
+        bool m_instantBuild = false;
+        // Blueprint the order keys act on; new plans extend it while `m_extendOrder` (until confirmed).
+        OrderId m_selectedOrder;
+        bool m_extendOrder = false;
         std::vector<std::string> m_siteWarnings;
         std::string m_status;
         double m_statusSeconds = 0.0;

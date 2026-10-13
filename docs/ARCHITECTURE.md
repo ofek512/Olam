@@ -116,6 +116,50 @@ One terrain representation, shown differently by zoom (screen px per tile, thres
 - Headless check: `olam_generate --local <site> --local-zoom <px> [--local-crop x,y] --png f` renders the same
   composition on the CPU (960 x 540).
 
+### Construction (Phase 4B)
+
+Plan: [4BPlan.md](../4BPlan.md). Data lives in `olam_settlement` (no SDL); tools and drawing data in
+`olam_settlement_views` (no SDL); the viewer only maps quads to the screen.
+
+- **Edges**: walls and doors sit on tile edges, floors on tiles; the 2 m terrain grid is unchanged.
+  `LocalEdge{x, y, axis}` is the North edge (corner (x, y) to (x + 1, y)) or West edge (to (x, y + 1)) of a tile,
+  so each edge has exactly one form (the south edge of a tile is the North edge of the tile below).
+  `edgeTiles`, `edgeEnd`, `tileEdges` convert. Walls need ground on both sides, so map-border edges are rejected.
+- **Catalogue** (`Construction.h`): `StructureKind` (Wall, Door, Floor), `StructureMaterial` (timber, wattle and
+  daub, rough stone, packed earth, wood plank), `ConstructionStage` (Planned → AwaitingMaterials → ReadyToBuild →
+  UnderConstruction → Completed) and integer `StructureProperties` (integrity, insulation, blocks movement /
+  sight, builder work). Enums are append-only. Placement limits are a plain `ConstructionConfig`.
+- **State** (`ConstructionState`): an overlay like `ResourceState`. Structures are kept by `StructureId` in an
+  ordered map, with an edge index (key `y << 17 | x << 1 | axis`) and a floor index (`y << 16 | x`). Keys are
+  row-major, so a rectangle query is one ordered range per row: O(rows · log n + k). Memory follows the number
+  of structures (~100 B each including map nodes), never the 9.4 M map tiles. Ids are assigned in order and
+  never reused (no slot map needed: stale ids simply resolve to nothing). `hash()` and a versioned
+  `serialize` / `deserialize` blob bound to world seed and site are tested; writing it to a settlement save
+  file is Phase 4B.7.
+- **Validation** returns the most severe `PlacementError`. Hard: outside the map, wrong material, occupied,
+  water, too steep (largest elevation difference to the 4 neighbours for floors, across the edge for walls;
+  computed on demand from the elevation layer, no slope layer is stored). Clearable (least severe): a standing
+  tree, or a shrub / bush / fallen log / rock; grass, ferns and flowers are trampled and forage or minerals never
+  block. A door may replace a wall; floors and walls never conflict.
+- **Clearing** goes through `ResourceState` (felling yields wood, `clearUnderstory` records cleared objects; its
+  blob is version 2 and still reads version 1), so views, sprites and the inspector show stumps and cleared
+  ground. Clearing bumps the resource revision, which rebuilds the view texture like a test harvest.
+- **Blueprints and orders** (4B.2): a `ConstructionOrder` groups the structures planned together (one house).
+  Its stage is not stored but derived as the least advanced stage of its structures, so it cannot drift. Plans
+  are ghosts: they hold their edges and tiles (conflicting with other placements) but change neither the map
+  nor `ResourceState`; they may sit on trees and shrubs, which are cleared when a structure begins
+  construction (a natural "clear the site" task for Phase 4C workers). Steps move only structures in the
+  expected stage, so repeating one is a no-op: `confirmOrder` (Planned → AwaitingMaterials), `debugDeliver`
+  (→ ReadyToBuild; replaced by stockpile delivery in 4B.5), `beginConstruction` (→ UnderConstruction, clears
+  the site), `addWork(units)` (integer builder work up to `workRequired` → Completed), `debugCompleteOrder`.
+  A fully completed order closes; `cancelOrder` removes unfinished structures and keeps completed ones.
+  Unfinished orders can be edited (new plans join them; removing a planned part drops it from its order); a
+  planned door may replace only an unfinished wall (replacing finished work is renovation, 4B.6).
+- **Drawing**: structures are drawn per frame for the visible rectangle (`collectStructureQuads`, filled
+  rectangles in tile units), so edits never rebuild the 3072² texture. Unfinished stages fade towards
+  blueprint blue. `ConstructionTool` (SDL-free, tested) turns mouse positions into snapped corners / edges /
+  tile rectangles, previews each part with its error and commits only the valid parts.
+
 ## World ownership
 
 `World` owns **data**: `WorldConfig`, the world seed, persistent layers, and world-level entities
@@ -143,7 +187,8 @@ Rule of thumb: if saving and reloading the world requires the data, `World` owns
 
 - Strongly typed IDs (`StrongId<Tag>`, `uint32_t`), `0` = invalid. Persistent references use IDs, not pointers.
 - Generation-created entities are stored in dense vectors indexed by ID (IDs never reused).
-  Generational slot maps will be introduced for entities created/destroyed during play.
+  Generational slot maps will be introduced for entities created/destroyed during play when profiling shows
+  the need; construction (Phase 4B) keeps structures in an ordered map keyed by never-reused ids instead.
 
 ## Errors and assertions
 

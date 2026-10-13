@@ -54,6 +54,8 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\Olam.exe --load saves\12345.olamworld   # Ctrl+S saves, Ctrl+L reloads
 # Enter founds a settlement on the pinned/hovered tile (local map), M switches world <-> local map
 # Local map: F1-F9 views, G gather 1 kg / fell tree, Shift+G gather all, Y one year of regrowth
+# Local map build mode (B): 1 wall 2 door 3 floor 4 remove, Q/E material, R flip door, LMB drag plans a blueprint
+# Blueprints: Ctrl+LMB select, Enter confirm, V deliver, C complete, X cancel; I instant build (Shift clears trees)
 .\build\Release\olam_generate.exe --seed 12345 --size 2048x2048 --local river --png build\local.png
 # --local <x,y | river|coast|lake|forest|plain|mountain|dry>, --local-crop <x>,<y> for a full-res 768^2 crop
 ```

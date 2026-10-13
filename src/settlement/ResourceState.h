@@ -33,11 +33,16 @@ namespace olam
         // Fells the tree; returns its wood (kg), or 0 if it was already felled.
         float fellTree(const SettlementMap &map, TreeId tree);
 
+        bool understoryCleared(const SettlementMap &map, std::size_t u) const;
+        // Removes understory object `u` (shrub, log, rock...) to clear a site; false if it was already cleared.
+        bool clearUnderstory(const SettlementMap &map, std::size_t u);
+
         // Forage grows back by `years` of each kind's regrowth rate (deadwood slowly); felled trees stay felled.
         void regrow(const SettlementMap &map, float years);
 
         std::size_t changedForageCount() const { return m_forageTaken.size(); }
         std::size_t felledTreeCount() const { return m_felledTrees.size(); }
+        std::size_t clearedUnderstoryCount() const { return m_clearedUnderstory.size(); }
         // Bumped on every change, so renderers know when to refresh.
         std::uint64_t revision() const { return m_revision; }
 
@@ -50,6 +55,7 @@ namespace olam
         // Local tile key (y << 16 | x); ordered containers keep saves deterministic.
         std::map<std::uint32_t, float> m_forageTaken;
         std::set<std::uint32_t> m_felledTrees;
+        std::set<std::uint32_t> m_clearedUnderstory;
         std::uint64_t m_revision = 0;
     };
 

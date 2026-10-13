@@ -67,6 +67,23 @@ namespace olam
         renderer.drawRect({origin.x, origin.y, width * camera.zoom(), height * camera.zoom()}, Color{230, 200, 80});
     }
 
+    void SettlementDebugRenderer::drawStructures(Renderer &renderer, const Camera2D &camera, const ConstructionState &construction)
+    {
+        const auto start = std::chrono::steady_clock::now();
+        collectStructureQuads(construction, camera.visibleWorldRect(), camera.zoom(), m_structureQuads);
+        drawQuads(renderer, camera, m_structureQuads);
+        m_structureMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+    }
+
+    void SettlementDebugRenderer::drawQuads(Renderer &renderer, const Camera2D &camera, std::span<const StructureQuad> quads)
+    {
+        const float zoom = camera.zoom();
+        const Vec2 origin = camera.worldToScreen({0.0f, 0.0f});
+        for (const StructureQuad &q : quads)
+            renderer.fillRect({origin.x + q.rect.x * zoom, origin.y + q.rect.y * zoom, q.rect.w * zoom, q.rect.h * zoom},
+                              Color{q.rgba[0], q.rgba[1], q.rgba[2], q.rgba[3]});
+    }
+
     void SettlementDebugRenderer::drawSprites(Renderer &renderer, const Camera2D &camera, const SettlementMap &map,
                                               const Rect &visible, const ResourceState *state)
     {
