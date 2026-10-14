@@ -18,8 +18,8 @@ namespace olam
     {
 
         constexpr std::uint32_t kMagic = 0x53434C4F; // "OLCS"
-        // Version 1 (Phase 4B.1) had no construction orders; it still loads.
-        constexpr std::uint32_t kVersion = 2;
+        // Version 1 (Phase 4B.1) had no construction orders, version 2 (4B.2) no rooms; both still load.
+        constexpr std::uint32_t kVersion = 3;
         // Index keys hold coordinates in 15 (edge y) and 16 bits.
         constexpr std::int32_t kMaxKeyCoord = 32766;
 
@@ -190,6 +190,7 @@ namespace olam
         const OrderId replacedOrder = edgeAt(edge).isValid() ? erase(edgeAt(edge)) : OrderId{};
         result.id = add(structure);
         pruneOrder(replacedOrder);
+        updateRooms();
         return result;
     }
 
@@ -230,6 +231,7 @@ namespace olam
             added.workDone = structureProperties(added.kind, added.material).workRequired;
         if (added.order.isValid())
             m_orders.at(added.order.value).components.push_back(id);
+        markRooms(added);
         ++m_revision;
         return id;
     }
@@ -243,6 +245,7 @@ namespace olam
             m_floors.erase(tileKey(structure.tile));
         else
             m_edges.erase(edgeKey(structure.edge()));
+        markRooms(structure);
         const OrderId orderId = structure.order;
         if (orderId.isValid())
             std::erase(m_orders.at(orderId.value).components, id);
@@ -272,6 +275,7 @@ namespace olam
         if (!m_structures.contains(id.value))
             return false;
         pruneOrder(erase(id));
+        updateRooms();
         return true;
     }
 
@@ -279,7 +283,8 @@ namespace olam
     {
         const std::vector<StructureId> ids = structuresInRect(a, b);
         for (const StructureId id : ids)
-            remove(id);
+            pruneOrder(erase(id));
+        updateRooms();
         return ids.size();
     }
 
@@ -431,6 +436,13 @@ namespace olam
 
     bool ConstructionState::addWork(StructureId id, std::uint16_t units)
     {
+        const bool worked = work(id, units);
+        updateRooms();
+        return worked;
+    }
+
+    bool ConstructionState::work(StructureId id, std::uint16_t units)
+    {
         const auto it = m_structures.find(id.value);
         if (it == m_structures.end() || it->second.stage != ConstructionStage::UnderConstruction || units == 0)
             return false;
@@ -441,8 +453,30 @@ namespace olam
         if (s.workDone >= required)
         {
             s.stage = ConstructionStage::Completed;
+            markRooms(s);
             pruneOrder(s.order);
         }
+        return true;
+    }
+
+    void ConstructionState::markRooms(const Structure &structure)
+    {
+        if (isEdgeStructure(structure.kind) && structure.stage == ConstructionStage::Completed)
+            m_rooms.markDirty(structure.edge());
+    }
+
+    void ConstructionState::updateRooms()
+    {
+        if (m_rooms.dirty())
+            m_rooms.update(*this);
+    }
+
+    bool ConstructionState::setRoof(RoomId id, RoofSettings roof)
+    {
+        const Room *room = m_rooms.room(id);
+        if (!room || room->roof == roof || !m_rooms.setRoof(id, roof))
+            return false;
+        ++m_revision;
         return true;
     }
 
@@ -459,8 +493,9 @@ namespace olam
         {
             if (const auto cleared = beginConstruction(map, resources, component))
                 wood += *cleared;
-            addWork(component, std::numeric_limits<std::uint16_t>::max());
+            work(component, std::numeric_limits<std::uint16_t>::max());
         }
+        updateRooms();
         return wood;
     }
 
@@ -483,6 +518,7 @@ namespace olam
         }
         m_orders.erase(id.value);
         ++m_revision;
+        updateRooms();
         return removed;
     }
 
@@ -512,6 +548,7 @@ namespace olam
             for (const StructureId component : o.components)
                 writer.write(component);
         }
+        m_rooms.write(writer);
     }
 
     std::uint64_t ConstructionState::hash() const
@@ -628,6 +665,15 @@ namespace olam
         }
         if (listed.size() != members)
             return "construction orders and structures disagree";
+        // Rooms follow from the structures; the blob only adds their ids and roof settings (none before version 3).
+        for (const auto &[id, s] : loaded.m_structures)
+            loaded.markRooms(s);
+        loaded.updateRooms();
+        if (version >= 3)
+        {
+            if (auto error = loaded.m_rooms.restore(reader))
+                return error;
+        }
         loaded.m_nextId = nextId;
         loaded.m_nextOrderId = nextOrderId;
         loaded.m_revision = m_revision + 1;

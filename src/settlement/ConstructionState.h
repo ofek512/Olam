@@ -1,6 +1,7 @@
 #pragma once
 
 #include "settlement/Construction.h"
+#include "settlement/Rooms.h"
 
 #include <cstdint>
 #include <map>
@@ -102,7 +103,8 @@ namespace olam
 
     // Everything built or planned on a settlement map: a sparse overlay like ResourceState (the generated map
     // stays immutable). Structures are kept by id with ordered edge and tile indices, so memory follows the number
-    // of structures, not the map size, and iteration and saves are deterministic.
+    // of structures, not the map size, and iteration and saves are deterministic. The rooms enclosed by completed
+    // walls and doors are kept up to date after every edit.
     class ConstructionState
     {
     public:
@@ -172,9 +174,15 @@ namespace olam
         // number of structures removed.
         std::size_t cancelOrder(OrderId id);
 
+        // Rooms and buildings enclosed by the completed walls and doors.
+        const RoomIndex &rooms() const { return m_rooms; }
+        // The player's roof choice for a room (kept through renovations); returns whether it changed, so false
+        // also for an unknown room or a material that is not in roofMaterials().
+        bool setRoof(RoomId id, RoofSettings roof);
+
         // Bumped on every change, so renderers know when to refresh.
         std::uint64_t revision() const { return m_revision; }
-        // Platform-independent hash of every structure and order.
+        // Platform-independent hash of every structure, order, room id and roof setting.
         std::uint64_t hash() const;
 
         // Versioned binary form, bound to the map's site and world seed.
@@ -192,6 +200,12 @@ namespace olam
         OrderId erase(StructureId id);
         // Drops an empty order, and closes one whose structures are all completed.
         void pruneOrder(OrderId id);
+        // addWork() without the room update.
+        bool work(StructureId id, std::uint16_t units);
+        // A completed wall or door appeared or vanished: rooms next to it need re-detection.
+        void markRooms(const Structure &structure);
+        // Re-detects rooms around edges changed since the last update; every public edit ends with it.
+        void updateRooms();
         void writeState(ByteWriter &writer) const;
 
         ConstructionConfig m_config;
@@ -200,6 +214,7 @@ namespace olam
         std::map<std::uint32_t, StructureId> m_edges;
         std::map<std::uint32_t, StructureId> m_floors;
         std::map<std::uint32_t, ConstructionOrder> m_orders;
+        RoomIndex m_rooms;
         std::uint32_t m_nextId = 1;
         std::uint32_t m_nextOrderId = 1;
         std::uint64_t m_revision = 0;

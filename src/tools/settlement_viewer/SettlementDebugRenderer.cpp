@@ -67,10 +67,11 @@ namespace olam
         renderer.drawRect({origin.x, origin.y, width * camera.zoom(), height * camera.zoom()}, Color{230, 200, 80});
     }
 
-    void SettlementDebugRenderer::drawStructures(Renderer &renderer, const Camera2D &camera, const ConstructionState &construction)
+    void SettlementDebugRenderer::drawStructures(Renderer &renderer, const Camera2D &camera, const ConstructionState &construction,
+                                                 RoomOverlay overlay)
     {
         const auto start = std::chrono::steady_clock::now();
-        collectStructureQuads(construction, camera.visibleWorldRect(), camera.zoom(), m_structureQuads);
+        collectStructureQuads(construction, camera.visibleWorldRect(), camera.zoom(), m_structureQuads, overlay);
         drawQuads(renderer, camera, m_structureQuads);
         m_structureMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
     }

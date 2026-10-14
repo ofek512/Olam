@@ -126,7 +126,7 @@ Plan: [4BPlan.md](../4BPlan.md). Data lives in `olam_settlement` (no SDL); tools
   so each edge has exactly one form (the south edge of a tile is the North edge of the tile below).
   `edgeTiles`, `edgeEnd`, `tileEdges` convert. Walls need ground on both sides, so map-border edges are rejected.
 - **Catalogue** (`Construction.h`): `StructureKind` (Wall, Door, Floor), `StructureMaterial` (timber, wattle and
-  daub, rough stone, packed earth, wood plank), `ConstructionStage` (Planned → AwaitingMaterials → ReadyToBuild →
+  daub, rough stone, packed earth, wood plank, thatch for roofs), `ConstructionStage` (Planned → AwaitingMaterials → ReadyToBuild →
   UnderConstruction → Completed) and integer `StructureProperties` (integrity, insulation, blocks movement /
   sight, builder work). Enums are append-only. Placement limits are a plain `ConstructionConfig`.
 - **State** (`ConstructionState`): an overlay like `ResourceState`. Structures are kept by `StructureId` in an
@@ -155,10 +155,35 @@ Plan: [4BPlan.md](../4BPlan.md). Data lives in `olam_settlement` (no SDL); tools
   A fully completed order closes; `cancelOrder` removes unfinished structures and keeps completed ones.
   Unfinished orders can be edited (new plans join them; removing a planned part drops it from its order); a
   planned door may replace only an unfinished wall (replacing finished work is renovation, 4B.6).
+- **Rooms** (4B.3, `Rooms.h`): a room is the tiles connected without crossing a completed wall or door, at most
+  `maxRoomTiles` (1024, 4096 m²); anything larger, or reaching the map border, is open ground. Planned and
+  unfinished parts are openings; a completed door seals a room (it stays a passage for later pathfinding).
+  `RoomIndex` is derived data owned by `ConstructionState` and current after every public edit: a completed
+  wall or door that appears or vanishes marks its two tiles, and the update takes apart only the rooms holding
+  those tiles and floods again from them. Floods stop at the size limit, and an escaped flood marks its tiles
+  as open ground for the rest of the update, so an edit costs O(maxRoomTiles · log n) whatever the map size
+  (a wall in open ground: ~0.3 ms Release, ~3 ms Debug; a whole order completed in one update: ~0.35 ms).
+  Batch operations (`removeInRect`, `debugCompleteOrder`) update once; tool drags still update per part.
+- **Identity**: a re-detected room takes the id of the old room it overlaps most (largest overlaps first, ties
+  to the lower id, each id once), so after a split the larger part keeps the id and the smaller one is new but
+  inherits the roof settings, and after a merge the larger room survives. An extension keeps the room's
+  identity when it is walled in before the old wall comes down (removing the wall first opens the room).
+- **Buildings**: rooms joined by completed doors (one dwelling); rooms that only share a wall, like terraced
+  houses, are separate buildings. Building ids pass on the same way, weighted by room tiles.
+- **Roofs** are inferred per room, never placed tile by tile. `RoofMode::Auto` roofs a room when every tile is
+  within `maxRoofSupportDistance` (3) steps of a tile along a wall (doors carry nothing): rooms up to 8 tiles
+  (16 m) across. `Enabled` always roofs (the span check only guides inference), `Disabled` never does. The
+  material is one of `roofMaterials()` (thatch by default, timber). Settings are player data and survive
+  renovations. Roofs have no cost or construction stage yet (Phase 4B.5).
+- **Persistence**: blob version 3 appends, per room, its id, building id, anchor (first tile) and roof
+  settings; tiles are not saved. Loading detects rooms from the structures again and maps the saved ids onto
+  them, rejecting a blob whose rooms do not match. Versions 1 and 2 load with fresh ids and automatic roofs.
 - **Drawing**: structures are drawn per frame for the visible rectangle (`collectStructureQuads`, filled
   rectangles in tile units), so edits never rebuild the 3072² texture. Unfinished stages fade towards
-  blueprint blue. `ConstructionTool` (SDL-free, tested) turns mouse positions into snapped corners / edges /
-  tile rectangles, previews each part with its error and commits only the valid parts.
+  blueprint blue. The room overlay (roofed rooms in their translucent roof colour, or each room in its own
+  colour) is drawn as row runs between floors and walls. `ConstructionTool` (SDL-free, tested) turns mouse
+  positions into snapped corners / edges / tile rectangles, previews each part with its error and commits only
+  the valid parts.
 
 ## World ownership
 

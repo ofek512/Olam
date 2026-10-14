@@ -64,6 +64,9 @@ Short status checklist. Full vision and rationale: [agent.MD](../agent.MD).
         `ConstructionTool`; B build mode, 1-4 tools, Q/E material, R flip door, Shift clears obstructions)
   - [x] 4B.2 Blueprints and construction orders (`ConstructionOrder`, derived order stage, debug deliver /
         complete; I instant build, Ctrl+LMB select order, Enter confirm, V deliver, C complete, X cancel)
+  - [x] 4B.3 Rooms, enclosure and roofs (`RoomIndex`: local incremental detection, stable room and building
+        ids, door-joined buildings, automatic roofs with Auto / Enabled / Disabled and material overrides;
+        T roof mode, Shift+T roof material, O roofs / rooms overlay)
 - [ ] 4C First population
 - [ ] 4D First economy
 - [ ] 4E Immigration and growth

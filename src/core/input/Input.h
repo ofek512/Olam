@@ -62,6 +62,9 @@ namespace olam
         X,
         C,
         V,
+        // Rooms and roofs (local map).
+        T,
+        O,
         Count,
     };
 

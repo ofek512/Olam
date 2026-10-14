@@ -14,6 +14,7 @@ namespace olam
                                                                      StructureMaterial::RoughStone};
         constexpr std::array<StructureMaterial, 1> kDoorMaterials = {StructureMaterial::Timber};
         constexpr std::array<StructureMaterial, 2> kFloorMaterials = {StructureMaterial::PackedEarth, StructureMaterial::WoodPlank};
+        constexpr std::array<StructureMaterial, 2> kRoofMaterials = {StructureMaterial::Thatch, StructureMaterial::Timber};
 
         constexpr std::size_t kMaterialCount = static_cast<std::size_t>(StructureMaterial::Count);
 
@@ -59,6 +60,8 @@ namespace olam
             return "Packed earth";
         case StructureMaterial::WoodPlank:
             return "Wood plank";
+        case StructureMaterial::Thatch:
+            return "Thatch";
         case StructureMaterial::Count:
             break;
         }
@@ -111,6 +114,13 @@ namespace olam
     {
         OLAM_ASSERT(isMaterialAllowed(kind, material));
         return kProperties[static_cast<std::size_t>(kind)][static_cast<std::size_t>(material)];
+    }
+
+    std::span<const StructureMaterial> roofMaterials() { return kRoofMaterials; }
+
+    bool isRoofMaterial(StructureMaterial material)
+    {
+        return std::find(kRoofMaterials.begin(), kRoofMaterials.end(), material) != kRoofMaterials.end();
     }
 
 } // namespace olam

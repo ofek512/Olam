@@ -33,6 +33,8 @@ namespace olam
         RoughStone,
         PackedEarth,
         WoodPlank,
+        // Roofs only (Phase 4B.3).
+        Thatch,
         Count,
     };
 
@@ -70,6 +72,10 @@ namespace olam
     bool isMaterialAllowed(StructureKind kind, StructureMaterial material);
     // Asserts that the material is allowed.
     const StructureProperties &structureProperties(StructureKind kind, StructureMaterial material);
+
+    // Materials a room's roof can be made of (the first is the default). Roofs are inferred per room, not placed.
+    std::span<const StructureMaterial> roofMaterials();
+    bool isRoofMaterial(StructureMaterial material);
 
     enum class EdgeAxis : std::uint8_t
     {
@@ -123,6 +129,12 @@ namespace olam
         int maxFloorRiseDm = 5;
         // Largest elevation difference (dm) across a wall or door edge.
         int maxEdgeRiseDm = 8;
+        // Largest enclosed area (tiles) that is still a room; anything larger is open ground. It also bounds the
+        // work of each room update: 1024 tiles is 4096 m2.
+        int maxRoomTiles = 1024;
+        // Automatic roofs need every tile of a room within this many steps of a tile along one of its walls: 3
+        // allows rooms up to 8 tiles (16 m) across.
+        int maxRoofSupportDistance = 3;
     };
 
 } // namespace olam

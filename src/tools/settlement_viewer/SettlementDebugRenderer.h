@@ -33,8 +33,9 @@ namespace olam
         // `state` (optional): felled trees and gathered forage; the texture is rebuilt when its revision changes.
         void draw(Renderer &renderer, const Camera2D &camera, const SettlementMap &map, const ResourceState *state = nullptr);
 
-        // Walls, doors and floors in view, drawn per frame over the map (no texture rebuild on edits).
-        void drawStructures(Renderer &renderer, const Camera2D &camera, const ConstructionState &construction);
+        // Walls, doors, floors and the room overlay in view, drawn per frame over the map (no texture rebuild on edits).
+        void drawStructures(Renderer &renderer, const Camera2D &camera, const ConstructionState &construction,
+                            RoomOverlay overlay = RoomOverlay::Roofs);
         // Filled quads in map tiles, e.g. a construction preview.
         static void drawQuads(Renderer &renderer, const Camera2D &camera, std::span<const StructureQuad> quads);
 

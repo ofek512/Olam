@@ -49,8 +49,26 @@ namespace olam
             return text + ")";
         }
 
-        void describeConstruction(const ConstructionState &construction, LocalCoord coord, std::vector<std::string> &lines)
+        void describeRoom(const ConstructionState &construction, LocalCoord coord, double tileM, std::vector<std::string> &lines)
         {
+            const RoomId id = construction.rooms().roomAt(coord);
+            const Room *room = construction.rooms().room(id);
+            if (!room)
+                return;
+            const auto tiles = room->tiles.size();
+            lines.push_back(std::format("Room #{} (building #{}): {} tiles, {:.0f} m2, {} door(s)", id.value, room->building.value, tiles,
+                                        static_cast<double>(tiles) * tileM * tileM, room->doors));
+            if (room->roofed())
+                lines.push_back(std::format("Roof: {} ({})", toString(room->roof.material), toString(room->roof.mode)));
+            else if (room->roof.mode == RoofMode::Auto)
+                lines.push_back("Roof: none (auto: too wide for its walls)");
+            else
+                lines.push_back(std::format("Roof: none ({})", toString(room->roof.mode)));
+        }
+
+        void describeConstruction(const ConstructionState &construction, LocalCoord coord, double tileM, std::vector<std::string> &lines)
+        {
+            describeRoom(construction, coord, tileM, lines);
             if (const Structure *floor = construction.structure(construction.floorAt(coord)))
                 lines.push_back("Floor: " + describeStructure(*floor));
             constexpr const char *kSides[] = {"N", "E", "S", "W"};
@@ -92,7 +110,7 @@ namespace olam
                                     coord.y * tileM));
         lines.push_back(std::format("Elevation {:.1f} m", map.elevationMeters(i)));
         if (construction)
-            describeConstruction(*construction, coord, lines);
+            describeConstruction(*construction, coord, tileM, lines);
         if (terrain.water[i] != LocalWater::None)
         {
             lines.push_back(std::format("Water: {}", toString(terrain.water[i])));

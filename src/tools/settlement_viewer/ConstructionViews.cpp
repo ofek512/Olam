@@ -17,6 +17,13 @@ namespace olam
             {140, 140, 135, 255}, // Rough stone
             {125, 100, 75, 255},  // Packed earth
             {180, 135, 85, 255},  // Wood plank
+            {205, 175, 95, 255},  // Thatch
+        };
+
+        constexpr std::uint8_t kRoofAlpha = 150;
+        constexpr Rgba kRoomColors[] = {
+            {235, 120, 90, 90}, {110, 200, 120, 90}, {100, 150, 240, 90}, {230, 200, 80, 90},
+            {190, 110, 220, 90}, {80, 200, 210, 90}, {240, 150, 190, 90},
         };
 
         constexpr Rgba kBlueprint{90, 150, 255, 255};
@@ -85,7 +92,48 @@ namespace olam
             }
         }
 
+        void roomQuads(const ConstructionState &construction, LocalCoord a, LocalCoord b, RoomOverlay overlay,
+                       std::vector<StructureQuad> &out)
+        {
+            if (overlay == RoomOverlay::None)
+                return;
+            const RoomIndex &rooms = construction.rooms();
+            for (const RoomRun &run : rooms.runsInRect(a, b))
+            {
+                const Room &room = *rooms.room(run.room);
+                if (overlay == RoomOverlay::Roofs && !room.roofed())
+                    continue;
+                const Rgba color = overlay == RoomOverlay::Roofs ? roofColor(room.roof.material) : roomColor(run.room);
+                out.push_back({{static_cast<float>(run.x0), static_cast<float>(run.y), static_cast<float>(run.x1 - run.x0 + 1), 1.0f}, color});
+            }
+        }
+
     } // namespace
+
+    std::string_view toString(RoomOverlay overlay)
+    {
+        switch (overlay)
+        {
+        case RoomOverlay::Roofs:
+            return "roofs";
+        case RoomOverlay::Rooms:
+            return "rooms";
+        case RoomOverlay::None:
+            return "none";
+        case RoomOverlay::Count:
+            break;
+        }
+        return "?";
+    }
+
+    std::array<std::uint8_t, 4> roofColor(StructureMaterial material)
+    {
+        Rgba color = kMaterialColors[static_cast<std::size_t>(material)];
+        color[3] = kRoofAlpha;
+        return color;
+    }
+
+    std::array<std::uint8_t, 4> roomColor(RoomId room) { return kRoomColors[room.value % std::size(kRoomColors)]; }
 
     std::array<std::uint8_t, 4> structureColor(StructureKind kind, StructureMaterial material, ConstructionStage stage)
     {
@@ -97,7 +145,8 @@ namespace olam
         return {lerp(color[0], kBlueprint[0], mix), lerp(color[1], kBlueprint[1], mix), lerp(color[2], kBlueprint[2], mix), kStageAlpha[s]};
     }
 
-    void collectStructureQuads(const ConstructionState &construction, Rect visible, float zoom, std::vector<StructureQuad> &out)
+    void collectStructureQuads(const ConstructionState &construction, Rect visible, float zoom, std::vector<StructureQuad> &out,
+                               RoomOverlay overlay)
     {
         out.clear();
         const LocalCoord a{static_cast<std::int32_t>(std::floor(visible.x)) - 1, static_cast<std::int32_t>(std::floor(visible.y)) - 1};
@@ -106,12 +155,21 @@ namespace olam
         if (b.x < 0 || b.y < 0)
             return;
         const float thickness = wallThickness(zoom);
-        // structuresInRect lists floors before edges, so walls are drawn over floors.
+        // structuresInRect lists floors before edges: the room overlay goes between them, under the walls.
+        bool overlaid = false;
         for (const StructureId id : construction.structuresInRect(a, b))
         {
             const Structure &s = *construction.structure(id);
+            if (!overlaid && s.kind != StructureKind::Floor)
+            {
+                roomQuads(construction, a, b, overlay, out);
+                overlaid = true;
+            }
             itemQuads(s.kind, s.edge(), s.flipped, structureColor(s.kind, s.material, s.stage), thickness, out);
         }
+        // Inside a large room no wall may be in view.
+        if (!overlaid)
+            roomQuads(construction, a, b, overlay, out);
     }
 
     void collectPreviewQuads(std::span<const PreviewItem> items, const ConstructionTool &tool, float zoom,

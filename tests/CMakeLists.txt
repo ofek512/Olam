@@ -44,5 +44,6 @@ olam_add_test_executable(olam_settlement_tests
     settlement/ConstructionTests.cpp
     settlement/ConstructionToolTests.cpp
     settlement/ConstructionOrderTests.cpp
+    settlement/RoomTests.cpp
 )
 target_link_libraries(olam_settlement_tests PRIVATE olam_settlement_views olam_worldgen)

@@ -10,6 +10,7 @@
 #include "settlement/ResourceState.h"
 #include "settlement/SettlementConfig.h"
 #include "tools/settlement_viewer/ConstructionTool.h"
+#include "tools/settlement_viewer/ConstructionViews.h"
 #include "tools/settlement_viewer/LocalViews.h"
 #include "tools/world_viewer/WorldViews.h"
 #include "world/World.h"
@@ -85,8 +86,12 @@ namespace olam
         void foundSettlement();
         // Developer test harvest on the pinned, else hovered, local tile: gather forage (all with `all`) or fell a tree.
         void testHarvest(bool all);
+        // Roof of the room on the pinned, else hovered, local tile: cycles its mode, or its material with `material`.
+        void cycleRoof(bool material);
         // Mouse position on the local map, in tiles.
         Vec2 localMouse() const;
+        // The pinned local tile, else the hovered one if it is on the map.
+        std::optional<LocalCoord> targetTile() const;
         // How the build tools place: blueprints, or instant developer building (Shift clears obstructions).
         PlacementOptions buildOptions() const;
         // Construction order of the wall, door or floor under the mouse.
@@ -131,6 +136,7 @@ namespace olam
         ConstructionTool m_buildTool;
         bool m_buildMode = false;
         bool m_instantBuild = false;
+        RoomOverlay m_roomOverlay = RoomOverlay::Roofs;
         // Blueprint the order keys act on; new plans extend it while `m_extendOrder` (until confirmed).
         OrderId m_selectedOrder;
         bool m_extendOrder = false;

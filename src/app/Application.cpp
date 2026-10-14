@@ -14,6 +14,7 @@
 #include "world/WorldStats.h"
 #include "worldgen/DefaultPipeline.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <format>
@@ -347,6 +348,14 @@ namespace olam
 
         if (m_input.wasPressed(Key::G))
             testHarvest(shift);
+        if (m_input.wasPressed(Key::T))
+            cycleRoof(shift);
+        if (m_input.wasPressed(Key::O))
+        {
+            const int count = static_cast<int>(RoomOverlay::Count);
+            m_roomOverlay = static_cast<RoomOverlay>((static_cast<int>(m_roomOverlay) + 1) % count);
+            setStatus(std::format("Room overlay: {}", toString(m_roomOverlay)));
+        }
         if (m_input.wasPressed(Key::Y))
         {
             m_resourceState.regrow(*m_settlement, 1.0f);
@@ -488,12 +497,46 @@ namespace olam
         return m_construction.orderAt(LocalCoord{static_cast<std::int32_t>(std::floor(mouse.x)), static_cast<std::int32_t>(std::floor(mouse.y))});
     }
 
+    std::optional<LocalCoord> Application::targetTile() const
+    {
+        if (m_localPinned)
+            return m_localPinned;
+        const Vec2 mouseMap = localMouse();
+        if (!contains(*m_settlement, mouseMap))
+            return std::nullopt;
+        return LocalCoord{static_cast<std::int32_t>(std::floor(mouseMap.x)), static_cast<std::int32_t>(std::floor(mouseMap.y))};
+    }
+
+    void Application::cycleRoof(bool material)
+    {
+        const std::optional<LocalCoord> tile = targetTile();
+        const RoomId id = tile ? m_construction.rooms().roomAt(*tile) : RoomId{};
+        const Room *room = m_construction.rooms().room(id);
+        if (!room)
+        {
+            setStatus("No room here: rooms need closed, completed walls and doors");
+            return;
+        }
+        RoofSettings roof = room->roof;
+        if (material)
+        {
+            const auto materials = roofMaterials();
+            const auto current = std::find(materials.begin(), materials.end(), roof.material);
+            const auto next = current == materials.end() || current + 1 == materials.end() ? materials.begin() : current + 1;
+            roof.material = *next;
+        }
+        else
+        {
+            roof.mode = static_cast<RoofMode>((static_cast<int>(roof.mode) + 1) % static_cast<int>(RoofMode::Count));
+        }
+        m_construction.setRoof(id, roof);
+        setStatus(std::format("Room #{}: {} roof, {}: {}", id.value, toString(roof.material), toString(roof.mode),
+                              room->roofed() ? "roofed" : "no roof"));
+    }
+
     void Application::testHarvest(bool all)
     {
-        std::optional<LocalCoord> tile = m_localPinned;
-        const Vec2 mouseMap = localMouse();
-        if (!tile && contains(*m_settlement, mouseMap))
-            tile = LocalCoord{static_cast<std::int32_t>(std::floor(mouseMap.x)), static_cast<std::int32_t>(std::floor(mouseMap.y))};
+        const std::optional<LocalCoord> tile = targetTile();
         if (!tile)
             return;
 
@@ -636,7 +679,7 @@ namespace olam
         if (m_mode == Mode::Local)
         {
             m_settlementRenderer->draw(*m_renderer, m_localCamera, *m_settlement, &m_resourceState);
-            m_settlementRenderer->drawStructures(*m_renderer, m_localCamera, m_construction);
+            m_settlementRenderer->drawStructures(*m_renderer, m_localCamera, m_construction, m_roomOverlay);
             const Vec2 mouseMap = localMouse();
             if (m_buildMode)
             {
@@ -763,6 +806,8 @@ namespace olam
                         m_settlementRenderer->spriteMilliseconds()),
             std::format("Structures {}   {} quads drawn in {:.2f} ms", m_construction.structureCount(),
                         m_settlementRenderer->structureQuadCount(), m_settlementRenderer->structureMilliseconds()),
+            std::format("Rooms {} ({} roofed) in {} building(s)   overlay: {}", m_construction.rooms().roomCount(),
+                        m_construction.rooms().roofedCount(), m_construction.rooms().buildingCount(), toString(m_roomOverlay)),
         };
         if (m_woodKg > 0.0f || m_resourceState.changedForageCount() > 0)
         {
@@ -781,6 +826,7 @@ namespace olam
                                       "WASD/Arrows move  Shift fast  Wheel zoom  MMB drag",
                                       "Tab/F1-F9 views  H shade  LMB pin tile",
                                       "G gather 1 kg / fell tree  Shift+G gather all  Y one year",
+                                      "T roof mode  Shift+T roof material  O roofs / rooms overlay",
                                       "B build mode  M world map  ` overlay  Esc quit",
                                   });
         if (m_buildMode)

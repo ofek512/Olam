@@ -56,6 +56,7 @@ ctest --test-dir build -C Debug --output-on-failure
 # Local map: F1-F9 views, G gather 1 kg / fell tree, Shift+G gather all, Y one year of regrowth
 # Local map build mode (B): 1 wall 2 door 3 floor 4 remove, Q/E material, R flip door, LMB drag plans a blueprint
 # Blueprints: Ctrl+LMB select, Enter confirm, V deliver, C complete, X cancel; I instant build (Shift clears trees)
+# Rooms: T roof mode of the room under the mouse (auto/always/never), Shift+T roof material, O roofs/rooms overlay
 .\build\Release\olam_generate.exe --seed 12345 --size 2048x2048 --local river --png build\local.png
 # --local <x,y | river|coast|lake|forest|plain|mountain|dry>, --local-crop <x>,<y> for a full-res 768^2 crop
 ```

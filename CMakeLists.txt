@@ -134,6 +134,7 @@ add_library(olam_settlement STATIC
     src/settlement/ResourceState.cpp
     src/settlement/Construction.cpp
     src/settlement/ConstructionState.cpp
+    src/settlement/Rooms.cpp
 )
 target_link_libraries(olam_settlement
     PUBLIC olam_world

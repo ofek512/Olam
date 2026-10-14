@@ -147,3 +147,45 @@ OLAM_TEST(structure_quads_cover_visible_structures)
     OLAM_CHECK(structureColor(StructureKind::Wall, StructureMaterial::Timber, ConstructionStage::Completed)[3] == 255);
     OLAM_CHECK(structureColor(StructureKind::Wall, StructureMaterial::Timber, ConstructionStage::Planned)[3] < 255);
 }
+
+OLAM_TEST(room_overlay_draws_roofs_between_floors_and_walls)
+{
+    const SettlementMap *map = test::constructionTestMap();
+    if (!map)
+        return;
+    const auto area = test::findClearArea(*map, 2, 2);
+    if (!area)
+        return;
+    ResourceState resources;
+    ConstructionState construction;
+    for (int i = 0; i < 2; ++i)
+    {
+        for (const LocalEdge edge : {LocalEdge{area->x + i, area->y, EdgeAxis::North}, LocalEdge{area->x + i, area->y + 2, EdgeAxis::North},
+                                     LocalEdge{area->x, area->y + i, EdgeAxis::West}, LocalEdge{area->x + 2, area->y + i, EdgeAxis::West}})
+            construction.placeEdge(*map, resources, StructureKind::Wall, StructureMaterial::Timber, edge);
+    }
+    construction.placeFloor(*map, resources, StructureMaterial::WoodPlank, *area);
+    OLAM_CHECK(construction.rooms().roomCount() == 1);
+
+    std::vector<StructureQuad> quads;
+    const Rect visible{static_cast<float>(area->x) - 4.0f, static_cast<float>(area->y) - 4.0f, 8.0f, 8.0f};
+    const auto roofQuads = [&]()
+    {
+        const auto roof = roofColor(StructureMaterial::Thatch);
+        return std::count_if(quads.begin(), quads.end(), [&](const StructureQuad &q) { return q.rgba == roof; });
+    };
+    collectStructureQuads(construction, visible, 16.0f, quads, RoomOverlay::None);
+    const std::size_t plain = quads.size();
+    OLAM_CHECK(plain == 1 + 8 && roofQuads() == 0);
+    // One run per row of the room, after the floor and before the walls.
+    collectStructureQuads(construction, visible, 16.0f, quads, RoomOverlay::Roofs);
+    OLAM_CHECK(quads.size() == plain + 2 && roofQuads() == 2);
+    OLAM_CHECK(quads[1].rgba == roofColor(StructureMaterial::Thatch) && quads[1].rect.w == 2.0f);
+    // Disabled roofs are not drawn; the rooms overlay still shows the room.
+    const RoomId room = construction.rooms().roomAt(*area);
+    construction.setRoof(room, {RoofMode::Disabled, StructureMaterial::Thatch});
+    collectStructureQuads(construction, visible, 16.0f, quads, RoomOverlay::Roofs);
+    OLAM_CHECK(quads.size() == plain);
+    collectStructureQuads(construction, visible, 16.0f, quads, RoomOverlay::Rooms);
+    OLAM_CHECK(quads.size() == plain + 2 && quads[1].rgba == roomColor(room));
+}
