@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -22,6 +23,9 @@ namespace olam
         Door,
         Floor,
         Remove,
+        // Phase 4B.4/4B.5.
+        Furniture,
+        Stockpile,
         Count,
     };
 
@@ -41,9 +45,15 @@ namespace olam
     struct PreviewItem
     {
         StructureKind kind = StructureKind::Wall;
-        // Edge structures: the edge. Floors: the tile (as edge x and y).
+        // Edge structures: the edge. Floors and stockpile tiles: the tile (as edge x and y). Furniture: its
+        // north-west cell.
         LocalEdge edge;
         PlacementError error = PlacementError::None;
+        // Furniture only.
+        FurnitureKind furniture = FurnitureKind::Bed;
+        Facing facing = Facing::North;
+        // A tile of a stockpile being marked (kind is then unused).
+        bool stockpile = false;
     };
 
     struct ToolResult
@@ -62,14 +72,27 @@ namespace olam
     public:
         BuildTool tool() const { return m_tool; }
         void selectTool(BuildTool tool);
-        // The kind the current tool places (Remove: none).
+        // The kind the current tool places (Remove, Stockpile: none).
         std::optional<StructureKind> kind() const;
 
-        // Material of the current tool's kind; cycling steps through structureMaterials().
+        // Material of the current tool's kind; cycling steps through structureMaterials() (furniture: through
+        // furnitureMaterials() of the selected piece).
         StructureMaterial material() const;
         void cycleMaterial(int step);
+        // Materials the current tool can use.
+        std::span<const StructureMaterial> materials() const;
+        void selectMaterial(StructureMaterial material);
         bool doorFlipped() const { return m_doorFlipped; }
         void flipDoor() { m_doorFlipped = !m_doorFlipped; }
+
+        // The furniture tool's piece and facing.
+        void selectFurniture(FurnitureKind kind);
+        FurnitureKind furniture() const { return m_furniture; }
+        Facing facing() const { return m_facing; }
+        // Quarter turn clockwise.
+        void rotate();
+        // North-west cell of the selected piece centred on a map position.
+        LocalCoord furnitureCell(Vec2 position) const;
 
         bool dragging() const { return m_anchor.has_value(); }
         void beginDrag(Vec2 position) { m_anchor = position; }
@@ -88,9 +111,12 @@ namespace olam
         Vec2 anchorOr(Vec2 cursor) const { return m_anchor.value_or(cursor); }
 
         BuildTool m_tool = BuildTool::Wall;
-        // Index into structureMaterials() per placeable kind.
+        // Index into structureMaterials() per placeable kind, and into furnitureMaterials() per piece.
         std::array<std::uint8_t, static_cast<std::size_t>(StructureKind::Count)> m_material{};
+        std::array<std::uint8_t, kFurnitureCount> m_furnitureMaterial{};
         bool m_doorFlipped = false;
+        FurnitureKind m_furniture = FurnitureKind::Bed;
+        Facing m_facing = Facing::North;
         std::optional<Vec2> m_anchor;
     };
 

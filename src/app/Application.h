@@ -3,6 +3,7 @@
 #include "core/input/Input.h"
 #include "core/time/FrameTimer.h"
 #include "core/time/SimulationClock.h"
+#include "core/ui/UiContext.h"
 #include "platform/sdl/SdlPlatform.h"
 #include "render/camera/Camera2D.h"
 #include "settlement/ConstructionState.h"
@@ -12,6 +13,7 @@
 #include "tools/settlement_viewer/ConstructionTool.h"
 #include "tools/settlement_viewer/ConstructionViews.h"
 #include "tools/settlement_viewer/LocalViews.h"
+#include "tools/settlement_viewer/SettlementHud.h"
 #include "tools/world_viewer/WorldViews.h"
 #include "world/World.h"
 #include "world/WorldConfig.h"
@@ -68,8 +70,8 @@ namespace olam
         void processInput();
         void processWorldInput();
         void processLocalInput();
-        // Construction tools while build mode is on (B).
-        void processBuildInput();
+        // Construction tools while build mode is on (B); `mapClick` is a left click not taken by the HUD.
+        void processBuildInput(bool mapClick);
         void update(double deltaTime);
         void simulationTick();
         void render();
@@ -98,6 +100,17 @@ namespace olam
         OrderId orderUnderMouse() const;
         // Developer lifecycle keys on the selected order: confirm, deliver, complete, cancel.
         void processOrderInput();
+        // Confirm (and allocate), deliver, complete or cancel the selected order, from a key or the HUD.
+        void orderAction(HudAction action);
+        // Builds the roofs the stockpiles can pay for over rooms touching these structures; returns how many.
+        int roofRoomsAround(const std::vector<Structure> &structures);
+        // Carries out the HUD's commands.
+        void applyHud(const std::vector<HudCommand> &commands);
+        // Room and stockpile on the pinned tile.
+        RoomId selectedRoom() const;
+        StockpileId selectedStockpile() const;
+        void toggleInstantBuild();
+        void cycleRoomOverlay();
         void setStatus(std::string message);
         void drawOverlay();
         void drawLocalOverlay();
@@ -137,6 +150,9 @@ namespace olam
         bool m_buildMode = false;
         bool m_instantBuild = false;
         RoomOverlay m_roomOverlay = RoomOverlay::Roofs;
+        // Game HUD of the local map, laid out during input handling and drawn at the end of the frame.
+        UiContext m_ui;
+        HudState m_hud;
         // Blueprint the order keys act on; new plans extend it while `m_extendOrder` (until confirmed).
         OrderId m_selectedOrder;
         bool m_extendOrder = false;

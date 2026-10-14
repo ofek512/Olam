@@ -67,6 +67,12 @@ Short status checklist. Full vision and rationale: [agent.MD](../agent.MD).
   - [x] 4B.3 Rooms, enclosure and roofs (`RoomIndex`: local incremental detection, stable room and building
         ids, door-joined buildings, automatic roofs with Auto / Enabled / Disabled and material overrides;
         T roof mode, Shift+T roof material, O roofs / rooms overlay)
+  - [x] 4B.4 Room functions, furniture and housing (furniture on a 0.5 m cell grid, `RoomFunctions` catalogue
+        with services, `evaluateRoom` capacity / privacy / comfort, bedroom vs dormitory, building names)
+  - [x] 4B.5 Material costs, stockpiles and construction bookkeeping (`Goods`, `ConstructionCosts`, `Stockpiles`,
+        reservations, debug delivery, refunds, paid roofs, founding stockpile)
+  - [x] First game HUD (`UiContext` immediate-mode UI; settlement HUD: resource bar, build menus, room /
+        blueprint / stockpile panels)
 - [ ] 4C First population
 - [ ] 4D First economy
 - [ ] 4E Immigration and growth

@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -35,13 +36,17 @@ namespace olam
 
     // Material colour of a structure, faded towards blueprint blue (and translucent) until it is completed.
     std::array<std::uint8_t, 4> structureColor(StructureKind kind, StructureMaterial material, ConstructionStage stage);
-    // Translucent colour of a roof of `material` (one of roofMaterials()).
-    std::array<std::uint8_t, 4> roofColor(StructureMaterial material);
+    // Translucent colour of a roof of `material` (one of roofMaterials()); faint blueprint blue while not built.
+    std::array<std::uint8_t, 4> roofColor(StructureMaterial material, bool built = true);
+    // Colour of a good in stockpiles and the HUD.
+    std::array<std::uint8_t, 4> goodColor(Good good);
+    // "Wood 120 kg, Clay 30 kg", or "nothing".
+    std::string describeGoods(const GoodAmounts &goods);
     // Translucent colour telling rooms apart; neighbouring ids differ.
     std::array<std::uint8_t, 4> roomColor(RoomId room);
 
-    // Quads drawing the structures in `visible` (tiles) at `zoom` pixels per tile: floors, then `overlay` over the
-    // rooms, then walls and doors.
+    // Quads drawing the structures in `visible` (tiles) at `zoom` pixels per tile: floors, stockpiles, `overlay` over
+    // the rooms, furniture, then walls and doors.
     void collectStructureQuads(const ConstructionState &construction, Rect visible, float zoom, std::vector<StructureQuad> &out,
                                RoomOverlay overlay = RoomOverlay::Roofs);
 

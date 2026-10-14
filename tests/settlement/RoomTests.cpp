@@ -115,6 +115,7 @@ OLAM_TEST(open_and_unfinished_enclosures_are_not_rooms)
     // Unfinished walls are openings: a blueprint hut encloses nothing until it is built.
     {
         ConstructionState construction;
+        test::addStockpile(*s->map, resources, construction);
         const OrderId order = construction.createOrder();
         build(*s, resources, construction, outline(s->at, 3, 3), StructureKind::Wall,
               {.stage = ConstructionStage::Planned, .order = order});
@@ -332,13 +333,9 @@ OLAM_TEST(room_detection_is_local_and_matches_full_detection)
     OLAM_CHECK(construction.rooms().roomCount() == 2);
     OLAM_CHECK(construction.rooms().room(construction.rooms().roomAt(at))->walls == 11);
 
-    // Detecting from scratch (as loading a version 2 blob does) finds the same rooms.
-    std::vector<std::uint8_t> bytes = construction.serialize(*s->map);
-    // The room list closes the blob: three counters, then 18 bytes per room.
-    bytes.resize(bytes.size() - 12 - 18 * construction.rooms().roomCount());
-    bytes[4] = 2;
+    // Loading detects rooms from scratch and matches them to the saved ones: the same rooms, tile for tile.
     ConstructionState fresh;
-    OLAM_CHECK(!fresh.deserialize(*s->map, bytes).has_value());
+    OLAM_CHECK(!fresh.deserialize(*s->map, construction.serialize(*s->map)).has_value());
     OLAM_CHECK(fresh.rooms().roomCount() == construction.rooms().roomCount());
     OLAM_CHECK(fresh.rooms().buildingCount() == construction.rooms().buildingCount());
     for (const RoomId id : construction.rooms().roomIds())
@@ -377,12 +374,15 @@ OLAM_TEST(rooms_round_trip_and_reject_mismatched_blobs)
     OLAM_CHECK(loaded.rooms().room(east)->roof == (RoofSettings{RoofMode::Disabled, StructureMaterial::Timber}));
     OLAM_CHECK(loaded.rooms().room(east)->building == construction.rooms().room(east)->building);
 
-    // A room anchored off its first tile, or an unknown roof mode, is rejected and leaves the state alone.
+    // A room anchored off its first tile, or an unknown roof mode, is rejected and leaves the state alone. The
+    // last room entry (23 bytes: id, building, anchor x and y, mode, material, function, built roof) comes just
+    // before the empty stockpile list (three 4-byte counters).
+    const std::size_t last = bytes.size() - 12 - 23;
     auto moved = bytes;
-    moved[moved.size() - 10] += 1;
+    moved[last + 8] += 1;
     OLAM_CHECK(loaded.deserialize(*s->map, moved).has_value());
     auto badMode = bytes;
-    badMode[badMode.size() - 2] = 7;
+    badMode[last + 16] = 7;
     OLAM_CHECK(loaded.deserialize(*s->map, badMode).has_value());
     auto truncated = bytes;
     truncated.resize(truncated.size() - 1);

@@ -32,15 +32,16 @@ olam_worldgen + olam_settlement_views ──> olam_generate (src/tools/generate,
 ```
 
 - `olam_core`: generic infrastructure only (no SDL, no world knowledge): logging, time, input state, files,
-  math, camera, assertions, strong IDs, `Layer<T>`, hashing, deterministic RNG.
+  math, camera, assertions, strong IDs, `Layer<T>`, hashing, deterministic RNG, and the immediate-mode UI
+  (`UiContext`: panels and buttons laid out from `Input`, producing a draw list; no SDL, so screens are tested).
 - `olam_world`: strategic world data model. No SDL, no rendering, no generation algorithms.
 - `olam_worldgen`: generation pipeline and passes. No SDL.
-- `olam_engine`: SDL platform layer, renderer, textures, debug text panels.
+- `olam_engine`: SDL platform layer, renderer, textures, debug text panels, `drawUi` (replays a UI draw list).
 - `olam_world_viewer`: world debug visualization and tile inspector.
 - `olam_settlement`: local settlement maps (`SettlementMap`, site checks, `generateLocalMap`). Depends on
   `olam_world` only: it reads a generated `World`, never runs world generation, and has no SDL.
 - `olam_settlement_views`: SDL-free local map colouring, tile inspector, procedural sprite atlas and visible-sprite
-  collection (viewer and headless PNG output).
+  collection (viewer and headless PNG output), construction tools and drawing, and the settlement HUD.
 - `olam_settlement_viewer`: SDL renderer for local maps.
 - `Olam`: composes systems; contains no world logic.
 - `olam_generate`: headless generation (`--seed`, `--size`, `--save`, `--png`, `--local`) printing per-pass timings,
@@ -174,16 +175,60 @@ Plan: [4BPlan.md](../4BPlan.md). Data lives in `olam_settlement` (no SDL); tools
   within `maxRoofSupportDistance` (3) steps of a tile along a wall (doors carry nothing): rooms up to 8 tiles
   (16 m) across. `Enabled` always roofs (the span check only guides inference), `Disabled` never does. The
   material is one of `roofMaterials()` (thatch by default, timber). Settings are player data and survive
-  renovations. Roofs have no cost or construction stage yet (Phase 4B.5).
-- **Persistence**: blob version 3 appends, per room, its id, building id, anchor (first tile) and roof
-  settings; tiles are not saved. Loading detects rooms from the structures again and maps the saved ids onto
-  them, rejecting a blob whose rooms do not match. Versions 1 and 2 load with fresh ids and automatic roofs.
+  renovations. A roof is paid for (4B.5): `roofBuiltTiles` counts the tiles built, `roofComplete()` needs all
+  of them, and `buildRoof` takes the missing tiles' cost from unreserved stockpile goods (a developer stand-in
+  for roofers; no stages of its own). Built tiles pass to re-detected rooms in proportion to their overlap, so
+  an extension needs roofing only over its new tiles.
+- **Furniture** (4B.4, `Furniture.h`): `StructureKind::Furniture` structures share orders, stages, costs and
+  removal with walls (templates in 4B.6 can therefore mix them freely). They sit on a sparse grid of 0.5 m cells
+  (`kCellsPerTile` = 4 on 2 m tiles) with a `FurnitureKind`, `Facing` (east / west swap the footprint) and the
+  north-west cell in `Structure::tile`; no cell layer exists, only an index from each touched tile to its pieces.
+  Pieces never overlap, never cross a wall or door of any stage (and walls never cut through them), stand on
+  ground like floors, and stay off stockpiles. The catalogue (bedroll, bed, double bed, table, stool, chest,
+  shelf, hearth, workbench, altar) gives each piece a footprint, materials and what it contributes: sleepers,
+  seats, work places, storage, comfort.
+- **Room functions** (4B.4, `RoomFunctions.h`): the player designates a room (`Room::function`, persisted and
+  inherited through renovations like roofs); furniture never changes it. A data table, after RimWorld
+  (furniture makes the room), Songs of Syx (rooms as workplaces) and Civilization (each building yields one
+  service), lists required furniture, the `RoomService` it yields (housing, storage, food, production, amenity,
+  faith, health), housing kind (private bedroom, communal dormitory), sleeper limit and base privacy:
+  Bedroom, Dormitory, Storeroom, Kitchen, Workshop, Dining hall, Shrine, Infirmary. `evaluateRoom` computes on
+  demand (no cache) whether it works, what is missing, a suggested function, capacities, and separately
+  privacy, furnishing, wall condition and a comfort potential from space, furnishing, privacy and roof.
+  `summarizeBuilding` names a building from its rooms (House, Dormitory, Storehouse, ...) and counts its
+  private and communal beds. No households or occupants yet (Phase 4C).
+- **Materials** (4B.5, `Goods.h`, `ConstructionCosts.h`, `Stockpiles.h`): goods (wood, stone, clay, thatch,
+  food) are whole kilograms whose arithmetic never goes below zero. `ConstructionCosts` is plain data (per
+  kind and material, per furniture piece and material, per roof tile) passed to `ConstructionState`; direct
+  developer building is free. Goods exist only in stockpiles: tile rectangles on open ground, owned by
+  `ConstructionState` so reservations, deliveries and refunds stay consistent with orders in one place (they may
+  move to a settlement-level owner once population systems use them). A confirmed order reserves what its
+  parts awaiting materials still need (`allocateMaterials`, nearest stockpiles first); reserved goods are
+  unavailable to other orders and to roofs. `debugDeliver` (hauling stand-in) takes the reservations out of
+  storage into the order's `onSite` pool and makes each part whose cost is on site ReadyToBuild, in placement
+  order; repeating it moves nothing. A removed part that was supplied returns its cost to the pool; cancelling,
+  or an order closing with leftovers, returns the pool to the stockpile it came from and releases its
+  reservations. Removing a stockpile drops its goods and reservations. A founding stockpile (3 x 3, nearest
+  open ground to the map centre) holds `defaultFoundingGoods()`.
+- **Persistence**: blob version 4 (versions 1-3 still load). Per room it stores the id, building id, anchor
+  (first tile), roof settings, function and built roof tiles; tiles are not saved. Loading detects rooms from
+  the structures again and maps the saved ids onto them, rejecting a blob whose rooms do not match. Structures
+  add furniture kind and facing, orders their goods on site and source, and stockpiles and reservations close
+  the blob (a reservation larger than its stock is rejected).
 - **Drawing**: structures are drawn per frame for the visible rectangle (`collectStructureQuads`, filled
   rectangles in tile units), so edits never rebuild the 3072² texture. Unfinished stages fade towards
   blueprint blue. The room overlay (roofed rooms in their translucent roof colour, or each room in its own
   colour) is drawn as row runs between floors and walls. `ConstructionTool` (SDL-free, tested) turns mouse
-  positions into snapped corners / edges / tile rectangles, previews each part with its error and commits only
-  the valid parts.
+  positions into snapped corners / edges / tile rectangles / furniture cells (the footprint centred on the
+  cursor), previews each part with its error and commits only the valid parts. Furniture is drawn as its body
+  plus one detail per kind (pillow, fire, altar top); stockpiles as a framed area with a heap per stored good;
+  unbuilt roofs faintly in blueprint blue.
+- **HUD** (`SettlementHud.h`, SDL-free): a resource bar (free goods, beds, rooms, buildings; totals recomputed
+  only when the construction revision changes), a bottom bar (Structure, Furniture, Stockpile, Remove,
+  blueprint / instant, overlay), build menus with costs and room uses in tooltips, and panels for the selected
+  room (designation, status, roof), blueprint (cost, reserved, on site, missing, lifecycle steps) and stockpile.
+  It only returns `HudCommand`s; the app carries them out exactly like the matching keys, and ignores map clicks
+  the HUD takes. Text is the 8 x 8 debug font for now.
 
 ## World ownership
 

@@ -1,5 +1,7 @@
 #include "settlement/Construction.h"
 
+#include "settlement/ConstructionCosts.h"
+
 #include "core/debug/Assert.h"
 
 #include <algorithm>
@@ -16,8 +18,6 @@ namespace olam
         constexpr std::array<StructureMaterial, 2> kFloorMaterials = {StructureMaterial::PackedEarth, StructureMaterial::WoodPlank};
         constexpr std::array<StructureMaterial, 2> kRoofMaterials = {StructureMaterial::Thatch, StructureMaterial::Timber};
 
-        constexpr std::size_t kMaterialCount = static_cast<std::size_t>(StructureMaterial::Count);
-
         // Indexed by kind, then material; entries for disallowed materials are unused.
         constexpr StructureProperties kProperties[static_cast<std::size_t>(StructureKind::Count)][kMaterialCount] = {
             // Wall
@@ -26,6 +26,8 @@ namespace olam
             {{200, 90, false, true, 40}, {}, {}, {}, {}},
             // Floor
             {{}, {}, {}, {100, 20, false, false, 20}, {150, 40, false, false, 40}},
+            // Furniture: see furnitureInfo().
+            {},
         };
 
     } // namespace
@@ -40,6 +42,8 @@ namespace olam
             return "Door";
         case StructureKind::Floor:
             return "Floor";
+        case StructureKind::Furniture:
+            return "Furniture";
         case StructureKind::Count:
             break;
         }
@@ -98,6 +102,7 @@ namespace olam
             return kDoorMaterials;
         case StructureKind::Floor:
             return kFloorMaterials;
+        case StructureKind::Furniture:
         case StructureKind::Count:
             break;
         }
@@ -117,6 +122,37 @@ namespace olam
     }
 
     std::span<const StructureMaterial> roofMaterials() { return kRoofMaterials; }
+
+    ConstructionCosts defaultConstructionCosts()
+    {
+        ConstructionCosts costs;
+        const auto set = [&](StructureKind kind, StructureMaterial material, GoodAmounts amounts)
+        { costs.structures[static_cast<std::size_t>(kind)][static_cast<std::size_t>(material)] = amounts; };
+        set(StructureKind::Wall, StructureMaterial::Timber, {{Good::Wood, 120}});
+        set(StructureKind::Wall, StructureMaterial::WattleAndDaub, {{Good::Wood, 40}, {Good::Clay, 150}});
+        set(StructureKind::Wall, StructureMaterial::RoughStone, {{Good::Stone, 600}});
+        set(StructureKind::Door, StructureMaterial::Timber, {{Good::Wood, 40}});
+        // Packed earth costs only work.
+        set(StructureKind::Floor, StructureMaterial::WoodPlank, {{Good::Wood, 50}});
+
+        const auto furniture = [&](FurnitureKind kind, StructureMaterial material, GoodAmounts amounts)
+        { costs.furniture[static_cast<std::size_t>(kind)][static_cast<std::size_t>(material)] = amounts; };
+        furniture(FurnitureKind::Bedroll, StructureMaterial::Thatch, {{Good::Thatch, 8}});
+        furniture(FurnitureKind::Bed, StructureMaterial::Timber, {{Good::Wood, 40}, {Good::Thatch, 5}});
+        furniture(FurnitureKind::DoubleBed, StructureMaterial::Timber, {{Good::Wood, 60}, {Good::Thatch, 8}});
+        furniture(FurnitureKind::Table, StructureMaterial::Timber, {{Good::Wood, 30}});
+        furniture(FurnitureKind::Chair, StructureMaterial::Timber, {{Good::Wood, 10}});
+        furniture(FurnitureKind::StorageChest, StructureMaterial::Timber, {{Good::Wood, 25}});
+        furniture(FurnitureKind::Shelf, StructureMaterial::Timber, {{Good::Wood, 30}});
+        furniture(FurnitureKind::CookingHearth, StructureMaterial::RoughStone, {{Good::Stone, 150}, {Good::Clay, 30}});
+        furniture(FurnitureKind::Workbench, StructureMaterial::Timber, {{Good::Wood, 50}});
+        furniture(FurnitureKind::Altar, StructureMaterial::RoughStone, {{Good::Stone, 120}});
+        furniture(FurnitureKind::Altar, StructureMaterial::Timber, {{Good::Wood, 40}});
+
+        costs.roofPerTile[static_cast<std::size_t>(StructureMaterial::Thatch)] = {{Good::Thatch, 40}, {Good::Wood, 20}};
+        costs.roofPerTile[static_cast<std::size_t>(StructureMaterial::Timber)] = {{Good::Wood, 60}};
+        return costs;
+    }
 
     bool isRoofMaterial(StructureMaterial material)
     {

@@ -59,6 +59,7 @@ OLAM_TEST(blueprints_are_ghosts_until_cancelled)
     const std::uint64_t generatedHash = hashSettlementMap(*map);
     ResourceState resources;
     ConstructionState construction;
+    test::addStockpile(*map, resources, construction);
 
     const OrderId order = construction.createOrder();
     OLAM_CHECK(construction.order(order) && construction.orderStage(order) == ConstructionStage::Planned);
@@ -92,6 +93,7 @@ OLAM_TEST(construction_stages_advance_once_in_order)
         return;
     ResourceState resources;
     ConstructionState construction;
+    test::addStockpile(*map, resources, construction);
     const OrderId order = construction.createOrder();
     const auto walls = planHut(*map, resources, construction, order, *area, 2, 2);
     const StructureId first = walls.front();
@@ -142,6 +144,7 @@ OLAM_TEST(blueprints_over_obstructions_clear_them_when_building_starts)
         return;
     ResourceState resources;
     ConstructionState construction;
+    test::addStockpile(*map, resources, construction);
     const LocalTerrainData &terrain = map->terrain();
     const auto tree = test::findTile(*map, [&](LocalCoord t)
                                      { return construction.checkFloor(*map, resources, StructureMaterial::PackedEarth, t) == PlacementError::Tree; });
@@ -182,6 +185,7 @@ OLAM_TEST(unfinished_blueprints_can_be_edited_and_cancelled_partly)
         return;
     ResourceState resources;
     ConstructionState construction;
+    test::addStockpile(*map, resources, construction);
     const OrderId order = construction.createOrder();
     const auto walls = planHut(*map, resources, construction, order, *area, 3, 3);
     const std::size_t parts = construction.order(order)->components.size();
@@ -235,6 +239,7 @@ OLAM_TEST(construction_orders_are_deterministic_and_round_trip)
     {
         ResourceState resources;
         ConstructionState construction;
+        test::addStockpile(*map, resources, construction);
         const OrderId a = construction.createOrder();
         planHut(*map, resources, construction, a, *area, 2, 3);
         const OrderId b = construction.createOrder();

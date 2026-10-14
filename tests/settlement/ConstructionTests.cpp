@@ -58,6 +58,9 @@ OLAM_TEST(construction_catalogue_is_consistent)
     for (std::size_t k = 0; k < static_cast<std::size_t>(StructureKind::Count); ++k)
     {
         const auto kind = static_cast<StructureKind>(k);
+        // Furniture materials depend on the piece (see FurnitureTests).
+        if (kind == StructureKind::Furniture)
+            continue;
         OLAM_CHECK(!structureMaterials(kind).empty());
         for (const StructureMaterial material : structureMaterials(kind))
         {

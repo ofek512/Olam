@@ -64,6 +64,7 @@ add_library(olam_core STATIC
     src/core/noise/Noise.cpp
     src/core/random/Pcg32.cpp
     src/core/random/Seed.cpp
+    src/core/ui/UiContext.cpp
     src/render/camera/Camera2D.cpp
 )
 target_include_directories(olam_core PUBLIC src)
@@ -135,6 +136,10 @@ add_library(olam_settlement STATIC
     src/settlement/Construction.cpp
     src/settlement/ConstructionState.cpp
     src/settlement/Rooms.cpp
+    src/settlement/Goods.cpp
+    src/settlement/Furniture.cpp
+    src/settlement/RoomFunctions.cpp
+    src/settlement/Stockpiles.cpp
 )
 target_link_libraries(olam_settlement
     PUBLIC olam_world
@@ -148,6 +153,7 @@ add_library(olam_settlement_views STATIC
     src/tools/settlement_viewer/LocalTileInspector.cpp
     src/tools/settlement_viewer/ConstructionTool.cpp
     src/tools/settlement_viewer/ConstructionViews.cpp
+    src/tools/settlement_viewer/SettlementHud.cpp
 )
 target_link_libraries(olam_settlement_views
     PUBLIC olam_settlement
@@ -167,6 +173,7 @@ if(OLAM_BUILD_ENGINE)
         src/render/renderer/Renderer.cpp
         src/render/texture/Texture.cpp
         src/render/debug_render/TextPanel.cpp
+        src/render/ui/UiRenderer.cpp
     )
     target_link_libraries(olam_engine
         PUBLIC olam_core SDL3::SDL3-static

@@ -766,8 +766,8 @@ It does not yet have a functioning population economy.
 - [x] 4B.1 — Construction grid, edge walls and structural placement
 - [x] 4B.2 — Blueprints and construction orders
 - [x] 4B.3 — Room detection and automatic roofs
-- [ ] 4B.4 — Room functions, furniture and housing
-- [ ] 4B.5 — Material costs, stockpiles and construction bookkeeping
+- [x] 4B.4 — Room functions, furniture and housing
+- [x] 4B.5 — Material costs, stockpiles and construction bookkeeping
 - [ ] 4B.6 — Templates, extensions and renovations
 - [ ] 4B.7 — Founding camp and first construction experience
 

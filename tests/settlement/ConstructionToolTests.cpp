@@ -169,18 +169,22 @@ OLAM_TEST(room_overlay_draws_roofs_between_floors_and_walls)
 
     std::vector<StructureQuad> quads;
     const Rect visible{static_cast<float>(area->x) - 4.0f, static_cast<float>(area->y) - 4.0f, 8.0f, 8.0f};
-    const auto roofQuads = [&]()
+    const auto roofQuads = [&](bool built)
     {
-        const auto roof = roofColor(StructureMaterial::Thatch);
+        const auto roof = roofColor(StructureMaterial::Thatch, built);
         return std::count_if(quads.begin(), quads.end(), [&](const StructureQuad &q) { return q.rgba == roof; });
     };
     collectStructureQuads(construction, visible, 16.0f, quads, RoomOverlay::None);
     const std::size_t plain = quads.size();
-    OLAM_CHECK(plain == 1 + 8 && roofQuads() == 0);
-    // One run per row of the room, after the floor and before the walls.
+    OLAM_CHECK(plain == 1 + 8 && roofQuads(false) == 0);
+    // One run per row of the room, after the floor and before the walls; faint until the roof is paid for.
     collectStructureQuads(construction, visible, 16.0f, quads, RoomOverlay::Roofs);
-    OLAM_CHECK(quads.size() == plain + 2 && roofQuads() == 2);
-    OLAM_CHECK(quads[1].rgba == roofColor(StructureMaterial::Thatch) && quads[1].rect.w == 2.0f);
+    OLAM_CHECK(quads.size() == plain + 2 && roofQuads(false) == 2);
+    OLAM_CHECK(quads[1].rect.w == 2.0f);
+    test::addStockpile(*map, resources, construction);
+    OLAM_CHECK(construction.buildRoof(construction.rooms().roomAt(*area)));
+    collectStructureQuads(construction, visible, 16.0f, quads, RoomOverlay::Roofs);
+    OLAM_CHECK(roofQuads(true) == 2 && quads[1].rgba == roofColor(StructureMaterial::Thatch));
     // Disabled roofs are not drawn; the rooms overlay still shows the room.
     const RoomId room = construction.rooms().roomAt(*area);
     construction.setRoof(room, {RoofMode::Disabled, StructureMaterial::Thatch});
@@ -188,4 +192,49 @@ OLAM_TEST(room_overlay_draws_roofs_between_floors_and_walls)
     OLAM_CHECK(quads.size() == plain);
     collectStructureQuads(construction, visible, 16.0f, quads, RoomOverlay::Rooms);
     OLAM_CHECK(quads.size() == plain + 2 && quads[1].rgba == roomColor(room));
+}
+
+OLAM_TEST(build_tool_places_furniture_and_stockpiles)
+{
+    const SettlementMap *map = test::constructionTestMap();
+    if (!map)
+        return;
+    const auto area = test::findClearArea(*map, 3, 3);
+    if (!area)
+        return;
+    ResourceState resources;
+    ConstructionState construction;
+    ConstructionTool tool;
+    const auto x = static_cast<float>(area->x);
+    const auto y = static_cast<float>(area->y);
+
+    // A bed centred on the cursor, inside the tile under it.
+    tool.selectFurniture(FurnitureKind::Bed);
+    OLAM_CHECK(tool.tool() == BuildTool::Furniture && tool.kind() == StructureKind::Furniture);
+    OLAM_CHECK(tool.material() == StructureMaterial::Timber && tool.materials().size() == 1);
+    OLAM_CHECK(tool.furnitureCell({x + 0.5f, y + 0.5f}) == (LocalCoord{area->x * 4 + 1, area->y * 4}));
+    const auto items = tool.preview(*map, resources, construction, {x + 0.5f, y + 0.5f});
+    OLAM_CHECK(items.size() == 1 && items.front().kind == StructureKind::Furniture && items.front().error == PlacementError::None);
+    OLAM_CHECK(tool.commit(*map, resources, construction, {x + 0.5f, y + 0.5f}, {}).placed == 1);
+    // Turned east it is 4 x 2 cells.
+    tool.rotate();
+    OLAM_CHECK(tool.facing() == Facing::East);
+    OLAM_CHECK(tool.furnitureCell({x + 1.5f, y + 1.5f}) == (LocalCoord{area->x * 4 + 4, area->y * 4 + 5}));
+    // The remove tool picks furniture under the cursor first.
+    tool.selectTool(BuildTool::Remove);
+    OLAM_CHECK(tool.commit(*map, resources, construction, {x + 0.5f, y + 0.5f}, {}).removed == 1);
+    OLAM_CHECK(construction.structureCount() == 0);
+
+    // A stockpile is one rectangle, made if every tile is fine.
+    tool.selectTool(BuildTool::Stockpile);
+    tool.beginDrag({x + 0.5f, y + 0.5f});
+    const auto tiles = tool.preview(*map, resources, construction, {x + 2.5f, y + 1.5f});
+    OLAM_CHECK(tiles.size() == 6 && tiles.front().stockpile);
+    const ToolResult made = tool.commit(*map, resources, construction, {x + 2.5f, y + 1.5f}, {});
+    OLAM_CHECK(made.placed == 1 && construction.stockpiles().count() == 1);
+    const Stockpile *stockpile = construction.stockpiles().stockpile(construction.stockpiles().stockpileAt(*area));
+    OLAM_CHECK(stockpile && stockpile->max == (LocalCoord{area->x + 2, area->y + 1}));
+    // Not over another one.
+    tool.beginDrag({x + 0.5f, y + 0.5f});
+    OLAM_CHECK(tool.commit(*map, resources, construction, {x + 0.5f, y + 2.5f}, {}).skipReason == PlacementError::Occupied);
 }

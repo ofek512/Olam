@@ -2,6 +2,7 @@
 
 #include "core/types/StrongId.h"
 #include "settlement/Construction.h"
+#include "settlement/RoomFunctions.h"
 
 #include <cstdint>
 #include <map>
@@ -61,8 +62,15 @@ namespace olam
         // Every tile is close enough to a wall to carry an automatic roof.
         bool roofSupported = false;
         RoofSettings roof;
+        // The player's designation (Phase 4B.4), kept through renovations like the roof settings.
+        RoomFunction function = RoomFunction::Unassigned;
+        // Roof tiles paid for and built (Phase 4B.5); an extension leaves the new part unbuilt.
+        std::uint32_t roofBuiltTiles = 0;
 
+        // The room should have a roof (automatically or by the player's choice).
         bool roofed() const { return roof.mode == RoofMode::Enabled || (roof.mode == RoofMode::Auto && roofSupported); }
+        // ... and it is built over every tile.
+        bool roofComplete() const { return roofed() && roofBuiltTiles >= tiles.size(); }
     };
 
     // Rooms joined by doors: one dwelling, one workshop. Rooms that only share a wall (terraced houses) are
@@ -86,7 +94,8 @@ namespace olam
     // it after every edit. Updates are local: only the areas next to changed edges are flooded again, each flood
     // stopping after ConstructionConfig::maxRoomTiles, so an edit never touches the whole map. Ids survive edits:
     // a re-detected room keeps the id (and roof settings) of the old room it overlaps most, so when rooms split or
-    // merge the larger part keeps its identity; buildings do the same with their rooms.
+    // merge the larger part keeps its identity; buildings do the same with their rooms. Built roof tiles pass on in
+    // proportion to the overlap.
     class RoomIndex
     {
     public:
@@ -112,10 +121,12 @@ namespace olam
         void update(const ConstructionState &construction);
         // False for an unknown room or a material that is not a roof material.
         bool setRoof(RoomId id, RoofSettings roof);
+        bool setFunction(RoomId id, RoomFunction function);
+        void setRoofBuilt(RoomId id);
         void write(ByteWriter &writer) const;
-        // Replaces the ids and roof settings of freshly detected rooms with saved ones (see write()); an error if
-        // the saved rooms do not match the detected ones.
-        std::optional<std::string> restore(ByteReader &reader);
+        // Replaces the ids and player settings of freshly detected rooms with saved ones (see write()) from a blob of
+        // `version`; an error if the saved rooms do not match the detected ones.
+        std::optional<std::string> restore(ByteReader &reader, std::uint32_t version);
 
         std::map<std::uint32_t, Room> m_rooms;
         // Tile key (y << 16 | x) -> room.

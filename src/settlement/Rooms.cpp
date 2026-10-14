@@ -348,8 +348,17 @@ namespace olam
             if (const std::uint32_t source = kept[r] != 0 ? kept[r] : largestOverlap(overlaps[r]); source != 0)
             {
                 room.roof = old.at(source).roof;
+                room.function = old.at(source).function;
                 room.building = old.at(source).building;
             }
+            // Built roof passes on in proportion: a fully roofed part stays roofed, an extension needs its own.
+            std::uint64_t built = 0;
+            for (const auto &[oldId, overlap] : overlaps[r])
+            {
+                const Room &before = old.at(oldId);
+                built += static_cast<std::uint64_t>(before.roofBuiltTiles) * overlap / before.tiles.size();
+            }
+            room.roofBuiltTiles = static_cast<std::uint32_t>(std::min<std::uint64_t>(built, room.tiles.size()));
             const RoomId id{kept[r] != 0 ? kept[r] : m_nextRoomId++};
             for (const LocalCoord tile : room.tiles)
                 m_tiles.emplace(tileKey(tile), id);
@@ -448,6 +457,21 @@ namespace olam
         return true;
     }
 
+    bool RoomIndex::setFunction(RoomId id, RoomFunction function)
+    {
+        const auto it = m_rooms.find(id.value);
+        if (it == m_rooms.end() || function >= RoomFunction::Count || it->second.function == function)
+            return false;
+        it->second.function = function;
+        return true;
+    }
+
+    void RoomIndex::setRoofBuilt(RoomId id)
+    {
+        Room &room = m_rooms.at(id.value);
+        room.roofBuiltTiles = static_cast<std::uint32_t>(room.tiles.size());
+    }
+
     void RoomIndex::write(ByteWriter &writer) const
     {
         writer.write(m_nextRoomId);
@@ -462,10 +486,12 @@ namespace olam
             writer.write(room.tiles.front().y);
             writer.write(room.roof.mode);
             writer.write(room.roof.material);
+            writer.write(room.function);
+            writer.write(room.roofBuiltTiles);
         }
     }
 
-    std::optional<std::string> RoomIndex::restore(ByteReader &reader)
+    std::optional<std::string> RoomIndex::restore(ByteReader &reader, std::uint32_t version)
     {
         std::uint32_t nextRoomId = 0;
         std::uint32_t nextBuildingId = 0;
@@ -497,10 +523,18 @@ namespace olam
             reader.read(anchor.y);
             reader.read(roof.mode);
             reader.read(roof.material);
+            RoomFunction function = RoomFunction::Unassigned;
+            std::uint32_t roofBuilt = 0;
+            // Version 4 (Phase 4B.4/4B.5) added the designation and the built roof.
+            if (version >= 4)
+            {
+                reader.read(function);
+                reader.read(roofBuilt);
+            }
             if (reader.failed())
                 return "truncated room list";
             if (id == 0 || id >= nextRoomId || rooms.contains(id) || !building.isValid() || building.value >= nextBuildingId ||
-                roof.mode >= RoofMode::Count || !isRoofMaterial(roof.material))
+                roof.mode >= RoofMode::Count || !isRoofMaterial(roof.material) || function >= RoomFunction::Count)
                 return "corrupt room entry";
             const RoomId detectedId = roomAt(anchor);
             const Room *detected = room(detectedId);
@@ -513,6 +547,10 @@ namespace olam
             Room &restored = rooms.emplace(id, *detected).first->second;
             restored.building = building;
             restored.roof = roof;
+            restored.function = function;
+            if (roofBuilt > restored.tiles.size())
+                return "corrupt room entry";
+            restored.roofBuiltTiles = roofBuilt;
             for (const LocalCoord tile : restored.tiles)
                 tiles.emplace(tileKey(tile), RoomId{id});
             buildings[building.value].rooms.push_back(RoomId{id});

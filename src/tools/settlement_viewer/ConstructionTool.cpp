@@ -30,7 +30,7 @@ namespace olam
 
         PreviewItem itemOf(const Structure &structure)
         {
-            return {structure.kind, structure.edge(), PlacementError::None};
+            return {structure.kind, structure.edge(), PlacementError::None, structure.furniture, structure.facing};
         }
 
     } // namespace
@@ -47,6 +47,10 @@ namespace olam
             return "Floor";
         case BuildTool::Remove:
             return "Remove";
+        case BuildTool::Furniture:
+            return "Furniture";
+        case BuildTool::Stockpile:
+            return "Stockpile";
         case BuildTool::Count:
             break;
         }
@@ -143,11 +147,22 @@ namespace olam
             return StructureKind::Door;
         case BuildTool::Floor:
             return StructureKind::Floor;
+        case BuildTool::Furniture:
+            return StructureKind::Furniture;
         case BuildTool::Remove:
+        case BuildTool::Stockpile:
         case BuildTool::Count:
             break;
         }
         return std::nullopt;
+    }
+
+    std::span<const StructureMaterial> ConstructionTool::materials() const
+    {
+        const auto k = kind();
+        if (!k)
+            return {};
+        return *k == StructureKind::Furniture ? furnitureMaterials(m_furniture) : structureMaterials(*k);
     }
 
     StructureMaterial ConstructionTool::material() const
@@ -155,7 +170,9 @@ namespace olam
         const auto k = kind();
         if (!k)
             return StructureMaterial::Timber;
-        return structureMaterials(*k)[m_material[static_cast<std::size_t>(*k)]];
+        const std::uint8_t index = *k == StructureKind::Furniture ? m_furnitureMaterial[static_cast<std::size_t>(m_furniture)]
+                                                                  : m_material[static_cast<std::size_t>(*k)];
+        return materials()[index];
     }
 
     void ConstructionTool::cycleMaterial(int step)
@@ -163,9 +180,40 @@ namespace olam
         const auto k = kind();
         if (!k)
             return;
-        const int count = static_cast<int>(structureMaterials(*k).size());
-        std::uint8_t &index = m_material[static_cast<std::size_t>(*k)];
+        const int count = static_cast<int>(materials().size());
+        std::uint8_t &index = *k == StructureKind::Furniture ? m_furnitureMaterial[static_cast<std::size_t>(m_furniture)]
+                                                             : m_material[static_cast<std::size_t>(*k)];
         index = static_cast<std::uint8_t>(((index + step) % count + count) % count);
+    }
+
+    void ConstructionTool::selectMaterial(StructureMaterial material)
+    {
+        const auto all = materials();
+        const auto it = std::find(all.begin(), all.end(), material);
+        if (it == all.end())
+            return;
+        const auto index = static_cast<std::uint8_t>(it - all.begin());
+        if (*kind() == StructureKind::Furniture)
+            m_furnitureMaterial[static_cast<std::size_t>(m_furniture)] = index;
+        else
+            m_material[static_cast<std::size_t>(*kind())] = index;
+    }
+
+    void ConstructionTool::selectFurniture(FurnitureKind kind)
+    {
+        m_furniture = kind;
+        selectTool(BuildTool::Furniture);
+    }
+
+    void ConstructionTool::rotate() { m_facing = static_cast<Facing>((static_cast<int>(m_facing) + 1) % static_cast<int>(Facing::Count)); }
+
+    LocalCoord ConstructionTool::furnitureCell(Vec2 position) const
+    {
+        const CellSize size = footprint(furnitureInfo(m_furniture), m_facing);
+        const auto cells = static_cast<float>(kCellsPerTile);
+        // The footprint's centre goes to the cell corner nearest the cursor.
+        return {static_cast<std::int32_t>(std::floor(position.x * cells - static_cast<float>(size.w) * 0.5f + 0.5f)),
+                static_cast<std::int32_t>(std::floor(position.y * cells - static_cast<float>(size.h) * 0.5f + 0.5f))};
     }
 
     std::vector<PreviewItem> ConstructionTool::preview(const SettlementMap &map, const ResourceState &resources,
@@ -195,6 +243,26 @@ namespace olam
                 items.push_back({StructureKind::Floor, {tile.x, tile.y}, construction.checkFloor(map, resources, material(), tile)});
             break;
         }
+        case BuildTool::Furniture:
+        {
+            const LocalCoord cell = furnitureCell(cursor);
+            items.push_back({StructureKind::Furniture, {cell.x, cell.y},
+                             construction.checkFurniture(map, resources, m_furniture, material(), cell, m_facing), m_furniture, m_facing});
+            break;
+        }
+        case BuildTool::Stockpile:
+        {
+            const LocalCoord from = tileAt(anchor);
+            const LocalCoord to = clampRect(from, tileAt(cursor));
+            const PlacementError error = construction.checkStockpile(map, resources, from, to);
+            for (const LocalCoord tile : tilesInRect(from, to))
+            {
+                PreviewItem item{StructureKind::Floor, {tile.x, tile.y}, error};
+                item.stockpile = true;
+                items.push_back(item);
+            }
+            break;
+        }
         case BuildTool::Remove:
         {
             const LocalCoord from = tileAt(anchor);
@@ -205,7 +273,15 @@ namespace olam
                     items.push_back(itemOf(*construction.structure(id)));
                 break;
             }
-            // A click removes the wall or door it is close to, else the floor under it, else the nearest edge's.
+            // A click removes furniture under it first.
+            const auto cells = static_cast<float>(kCellsPerTile);
+            const LocalCoord cell{static_cast<std::int32_t>(std::floor(cursor.x * cells)), static_cast<std::int32_t>(std::floor(cursor.y * cells))};
+            if (const Structure *piece = construction.structure(construction.furnitureAt(cell)))
+            {
+                items.push_back(itemOf(*piece));
+                break;
+            }
+            // Then the wall or door it is close to, else the floor under it, else the nearest edge's.
             const LocalEdge edge = nearestEdge(cursor);
             const auto [ex, ey] = edgeTiles(edge)[1];
             const float distance = edge.axis == EdgeAxis::North ? std::abs(cursor.y - static_cast<float>(ey))
@@ -230,20 +306,43 @@ namespace olam
         const std::vector<PreviewItem> items = preview(map, resources, construction, cursor, options);
         cancelDrag();
         options.flipped = m_doorFlipped;
+        options.facing = m_facing;
         ToolResult result;
+        if (m_tool == BuildTool::Stockpile)
+        {
+            if (items.empty())
+                return result;
+            const LocalCoord from{items.front().edge.x, items.front().edge.y};
+            const LocalCoord to{items.back().edge.x, items.back().edge.y};
+            const StockpileResult made = construction.createStockpile(map, resources, from, to,
+                                                                      options.clearObstructions && options.stage == ConstructionStage::Completed);
+            result.woodKg = made.woodKg;
+            result.placed = made.id.isValid() ? 1 : 0;
+            result.skipped = made.id.isValid() ? 0 : 1;
+            result.skipReason = made.error;
+            return result;
+        }
         for (const PreviewItem &item : items)
         {
             if (m_tool == BuildTool::Remove)
             {
-                const StructureId id = item.kind == StructureKind::Floor ? construction.floorAt({item.edge.x, item.edge.y})
-                                                                         : construction.edgeAt(item.edge);
+                StructureId id;
+                if (item.kind == StructureKind::Floor)
+                    id = construction.floorAt({item.edge.x, item.edge.y});
+                else if (item.kind == StructureKind::Furniture)
+                    id = construction.furnitureAt({item.edge.x, item.edge.y});
+                else
+                    id = construction.edgeAt(item.edge);
                 result.removed += construction.remove(id) ? 1 : 0;
                 continue;
             }
-            const PlacementResult placed =
-                item.kind == StructureKind::Floor
-                    ? construction.placeFloor(map, resources, material(), {item.edge.x, item.edge.y}, options)
-                    : construction.placeEdge(map, resources, item.kind, material(), item.edge, options);
+            PlacementResult placed;
+            if (item.kind == StructureKind::Floor)
+                placed = construction.placeFloor(map, resources, material(), {item.edge.x, item.edge.y}, options);
+            else if (item.kind == StructureKind::Furniture)
+                placed = construction.placeFurniture(map, resources, item.furniture, material(), {item.edge.x, item.edge.y}, options);
+            else
+                placed = construction.placeEdge(map, resources, item.kind, material(), item.edge, options);
             result.woodKg += placed.woodKg;
             if (placed.error == PlacementError::None)
             {

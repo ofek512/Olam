@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <memory>
 #include <optional>
+#include <vector>
 
 namespace olam::test
 {
@@ -77,6 +78,50 @@ namespace olam::test
             }
         }
         return std::nullopt;
+    }
+
+    // The edges around a w x h block: top and bottom rows, then left and right columns.
+    inline std::vector<LocalEdge> outlineEdges(LocalCoord at, int w, int h)
+    {
+        std::vector<LocalEdge> edges;
+        for (int x = at.x; x < at.x + w; ++x)
+        {
+            edges.push_back({x, at.y, EdgeAxis::North});
+            edges.push_back({x, at.y + h, EdgeAxis::North});
+        }
+        for (int y = at.y; y < at.y + h; ++y)
+        {
+            edges.push_back({at.x, y, EdgeAxis::West});
+            edges.push_back({at.x + w, y, EdgeAxis::West});
+        }
+        return edges;
+    }
+
+    // First cell of a tile.
+    inline LocalCoord tileCell(LocalCoord tile) { return {tile.x * kCellsPerTile, tile.y * kCellsPerTile}; }
+
+    // Enough of every good for any test building.
+    inline GoodAmounts plentyOfGoods()
+    {
+        return {{Good::Wood, 100000}, {Good::Stone, 100000}, {Good::Clay, 100000}, {Good::Thatch, 100000}, {Good::Food, 100000}};
+    }
+
+    // A 2 x 2 stockpile holding `goods`, searched from the map's far corner so it stays clear of findClearArea().
+    inline StockpileId addStockpile(const SettlementMap &map, ResourceState &resources, ConstructionState &construction,
+                                    const GoodAmounts &goods = plentyOfGoods())
+    {
+        for (int y = map.height() - 10; y > 8; y -= 3)
+        {
+            for (int x = map.width() - 10; x > 8; x -= 3)
+            {
+                if (construction.checkStockpile(map, resources, {x, y}, {x + 1, y + 1}) != PlacementError::None)
+                    continue;
+                const StockpileId id = construction.createStockpile(map, resources, {x, y}, {x + 1, y + 1}).id;
+                construction.debugAddGoods(id, goods);
+                return id;
+            }
+        }
+        return {};
     }
 
     // First tile off the map border (row-major) passing `predicate`.

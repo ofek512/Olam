@@ -3,6 +3,7 @@
 #include "settlement/ConstructionState.h"
 #include "settlement/ResourceState.h"
 #include "settlement/SettlementMap.h"
+#include "tools/settlement_viewer/ConstructionViews.h"
 
 #include <cmath>
 #include <format>
@@ -43,7 +44,7 @@ namespace olam
         {
             std::string text = std::format("{} ({}", toString(s.material), toString(s.stage));
             if (s.stage == ConstructionStage::UnderConstruction)
-                text += std::format(" {}/{}", s.workDone, structureProperties(s.kind, s.material).workRequired);
+                text += std::format(" {}/{}", s.workDone, requiredWork(s));
             if (s.order.isValid())
                 text += std::format(", order #{}", s.order.value);
             return text + ")";
@@ -56,10 +57,19 @@ namespace olam
             if (!room)
                 return;
             const auto tiles = room->tiles.size();
-            lines.push_back(std::format("Room #{} (building #{}): {} tiles, {:.0f} m2, {} door(s)", id.value, room->building.value, tiles,
-                                        static_cast<double>(tiles) * tileM * tileM, room->doors));
-            if (room->roofed())
+            const RoomStatus status = evaluateRoom(construction, id);
+            const BuildingSummary building = summarizeBuilding(construction, room->building);
+            lines.push_back(std::format("Room #{}: {}{} in {} #{}", id.value, toString(room->function),
+                                        status.functional ? " (working)" : "", building.name, room->building.value));
+            lines.push_back(std::format("  {} tiles, {:.0f} m2, {} door(s), comfort {}", tiles, static_cast<double>(tiles) * tileM * tileM,
+                                        room->doors, status.comfort));
+            if (!status.missing.empty())
+                lines.push_back(std::format("  needs {}", status.missing.front()));
+            if (room->roofComplete())
                 lines.push_back(std::format("Roof: {} ({})", toString(room->roof.material), toString(room->roof.mode)));
+            else if (room->roofed())
+                lines.push_back(std::format("Roof: {} planned, needs {}", toString(room->roof.material),
+                                            describeGoods(construction.roofCost(id))));
             else if (room->roof.mode == RoofMode::Auto)
                 lines.push_back("Roof: none (auto: too wide for its walls)");
             else
@@ -69,6 +79,14 @@ namespace olam
         void describeConstruction(const ConstructionState &construction, LocalCoord coord, double tileM, std::vector<std::string> &lines)
         {
             describeRoom(construction, coord, tileM, lines);
+            if (const Stockpile *stockpile = construction.stockpiles().stockpile(construction.stockpiles().stockpileAt(coord)))
+                lines.push_back(std::format("Stockpile #{}: {}", construction.stockpiles().stockpileAt(coord).value,
+                                            describeGoods(stockpile->stored)));
+            for (const StructureId piece : construction.furnitureOnTile(coord))
+            {
+                const Structure &s = *construction.structure(piece);
+                lines.push_back(std::format("{}: {}, facing {}", furnitureInfo(s.furniture).name, describeStructure(s), toString(s.facing)));
+            }
             if (const Structure *floor = construction.structure(construction.floorAt(coord)))
                 lines.push_back("Floor: " + describeStructure(*floor));
             constexpr const char *kSides[] = {"N", "E", "S", "W"};

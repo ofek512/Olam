@@ -3,6 +3,7 @@
 #include "core/logging/Log.h"
 #include "render/debug_render/TextPanel.h"
 #include "render/renderer/Renderer.h"
+#include "render/ui/UiRenderer.h"
 #include "settlement/LocalMapGenerator.h"
 #include "settlement/SettlementMap.h"
 #include "settlement/SiteSelection.h"
@@ -19,6 +20,7 @@
 #include <cmath>
 #include <format>
 #include <random>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -247,6 +249,13 @@ namespace olam
         m_settlement = std::move(result.map);
         m_resourceState = ResourceState{};
         m_construction = ConstructionState{};
+        // The settlers arrive with a small supply stockpile near the centre of the map.
+        const StockpileResult founding =
+            createFoundingStockpile(*m_settlement, m_resourceState, m_construction,
+                                    {m_settlement->width() / 2, m_settlement->height() / 2}, defaultFoundingGoods());
+        if (!founding.id.isValid())
+            logging::warn(LogCategory::Core, "No room for the founding stockpile");
+        m_hud = HudState{};
         m_buildTool.cancelDrag();
         m_buildMode = false;
         m_selectedOrder = {};
@@ -276,7 +285,10 @@ namespace olam
             if (m_mode == Mode::Local && m_buildTool.dragging())
                 m_buildTool.cancelDrag();
             else if (m_mode == Mode::Local && m_buildMode)
+            {
                 m_buildMode = false;
+                m_hud.menu = HudMenu::None;
+            }
             else
                 m_running = false;
         }
@@ -307,6 +319,22 @@ namespace olam
             return;
         }
 
+        // The HUD first: where it lies under the mouse, the map ignores clicks.
+        m_ui.begin(m_input, m_renderer->outputSize());
+        const HudModel model{m_construction,
+                             m_buildTool,
+                             m_settlement->config().tileSizeMeters,
+                             m_buildMode,
+                             m_instantBuild,
+                             m_roomOverlay,
+                             m_buildMode ? m_selectedOrder : OrderId{},
+                             selectedRoom(),
+                             selectedStockpile()};
+        const std::vector<HudCommand> commands = buildSettlementHud(m_ui, model, m_hud);
+        m_ui.end();
+        applyHud(commands);
+        const bool mapClick = m_input.wasPressed(MouseButton::Left) && !m_ui.wantsMouse();
+
         const bool shift = m_input.isDown(Key::LeftShift) || m_input.isDown(Key::RightShift);
         if (m_input.wasPressed(Key::Tab))
         {
@@ -331,19 +359,22 @@ namespace olam
         {
             m_buildMode = !m_buildMode;
             m_buildTool.cancelDrag();
+            if (!m_buildMode)
+                m_hud.menu = HudMenu::None;
         }
         if (m_buildMode)
         {
-            processBuildInput();
+            processBuildInput(mapClick);
         }
-        else if (m_input.wasPressed(MouseButton::Left))
+        else if (mapClick)
         {
+            // A click selects the tile (its room and stockpile show in the HUD); clicking it again releases it.
             const Vec2 mouseMap = localMouse();
-            if (m_localPinned || !contains(*m_settlement, mouseMap))
+            const LocalCoord tile{static_cast<std::int32_t>(std::floor(mouseMap.x)), static_cast<std::int32_t>(std::floor(mouseMap.y))};
+            if (!contains(*m_settlement, mouseMap) || (m_localPinned && *m_localPinned == tile))
                 m_localPinned.reset();
             else
-                m_localPinned = LocalCoord{static_cast<std::int32_t>(std::floor(mouseMap.x)),
-                                           static_cast<std::int32_t>(std::floor(mouseMap.y))};
+                m_localPinned = tile;
         }
 
         if (m_input.wasPressed(Key::G))
@@ -351,11 +382,7 @@ namespace olam
         if (m_input.wasPressed(Key::T))
             cycleRoof(shift);
         if (m_input.wasPressed(Key::O))
-        {
-            const int count = static_cast<int>(RoomOverlay::Count);
-            m_roomOverlay = static_cast<RoomOverlay>((static_cast<int>(m_roomOverlay) + 1) % count);
-            setStatus(std::format("Room overlay: {}", toString(m_roomOverlay)));
-        }
+            cycleRoomOverlay();
         if (m_input.wasPressed(Key::Y))
         {
             m_resourceState.regrow(*m_settlement, 1.0f);
@@ -363,7 +390,7 @@ namespace olam
         }
     }
 
-    void Application::processBuildInput()
+    void Application::processBuildInput(bool mapClick)
     {
         constexpr Key kToolKeys[] = {Key::Num1, Key::Num2, Key::Num3, Key::Num4};
         for (std::size_t i = 0; i < std::size(kToolKeys); ++i)
@@ -376,19 +403,21 @@ namespace olam
         if (m_input.wasPressed(Key::E))
             m_buildTool.cycleMaterial(1);
         if (m_input.wasPressed(Key::R))
-            m_buildTool.flipDoor();
-        if (m_input.wasPressed(Key::I))
         {
-            m_instantBuild = !m_instantBuild;
-            setStatus(m_instantBuild ? "Instant building (developer)" : "Blueprint planning");
+            if (m_buildTool.tool() == BuildTool::Furniture)
+                m_buildTool.rotate();
+            else
+                m_buildTool.flipDoor();
         }
+        if (m_input.wasPressed(Key::I))
+            toggleInstantBuild();
         processOrderInput();
 
         const Vec2 mouse = localMouse();
         const bool ctrl = m_input.isDown(Key::LeftCtrl) || m_input.isDown(Key::RightCtrl);
         if (m_input.wasPressed(MouseButton::Right))
             m_buildTool.cancelDrag();
-        if (m_input.wasPressed(MouseButton::Left) && ctrl)
+        if (mapClick && ctrl)
         {
             // Ctrl+click selects a blueprint to edit or advance; on empty ground it deselects.
             m_selectedOrder = orderUnderMouse();
@@ -397,7 +426,8 @@ namespace olam
                 setStatus(std::format("Selected order #{}: new plans join it", m_selectedOrder.value));
             return;
         }
-        if (m_input.wasPressed(MouseButton::Left))
+        // Drags start on the map only, but may end over the HUD.
+        if (mapClick)
             m_buildTool.beginDrag(mouse);
         if (!m_input.wasReleased(MouseButton::Left) || !m_buildTool.dragging())
             return;
@@ -405,7 +435,7 @@ namespace olam
         const BuildTool tool = m_buildTool.tool();
         PlacementOptions options = buildOptions();
         // Plans join the selected order while it is being drawn or edited, else start a new one.
-        if (options.stage == ConstructionStage::Planned && tool != BuildTool::Remove)
+        if (options.stage == ConstructionStage::Planned && tool != BuildTool::Remove && tool != BuildTool::Stockpile)
             options.order = m_extendOrder && m_construction.order(m_selectedOrder) ? m_selectedOrder : m_construction.createOrder();
         const ToolResult result = m_buildTool.commit(*m_settlement, m_resourceState, m_construction, mouse, options);
         m_woodKg += result.woodKg;
@@ -426,6 +456,12 @@ namespace olam
             setStatus(std::format("Removed {} structure(s)", result.removed));
             return;
         }
+        if (tool == BuildTool::Stockpile)
+        {
+            setStatus(result.placed > 0 ? "Stockpile marked: add goods from its panel (debug)"
+                                        : std::format("Cannot mark a stockpile there: {}", toString(result.skipReason)));
+            return;
+        }
         std::string status = options.order.isValid()
                                  ? std::format("Planned {} {} part(s) in order #{}", result.placed, toString(tool), options.order.value)
                                  : std::format("Built {} {} part(s)", result.placed, toString(tool));
@@ -438,44 +474,201 @@ namespace olam
 
     void Application::processOrderInput()
     {
-        const bool confirm = m_input.wasPressed(Key::Enter);
-        const bool deliver = m_input.wasPressed(Key::V);
-        const bool complete = m_input.wasPressed(Key::C);
-        const bool cancel = m_input.wasPressed(Key::X);
-        if (!confirm && !deliver && !complete && !cancel)
-            return;
+        if (m_input.wasPressed(Key::Enter))
+            orderAction(HudAction::ConfirmOrder);
+        if (m_input.wasPressed(Key::V))
+            orderAction(HudAction::DeliverOrder);
+        if (m_input.wasPressed(Key::C))
+            orderAction(HudAction::CompleteOrder);
+        if (m_input.wasPressed(Key::X))
+            orderAction(HudAction::CancelOrder);
+    }
+
+    void Application::orderAction(HudAction action)
+    {
         const OrderId id = m_selectedOrder;
         if (!m_construction.order(id))
         {
             setStatus("No blueprint selected (plan one, or Ctrl+click it)");
             return;
         }
-        if (confirm)
+        switch (action)
+        {
+        case HudAction::ConfirmOrder:
         {
             const bool changed = m_construction.confirmOrder(id);
-            // A confirmed order is finished planning: further plans start a new one.
+            // A confirmed order is finished planning: further plans start a new one. It reserves its materials.
             m_extendOrder = false;
-            setStatus(changed ? std::format("Order #{} confirmed: awaiting materials", id.value)
-                              : std::format("Order #{} has no planned parts to confirm", id.value));
+            const GoodAmounts missing = m_construction.allocateMaterials(id);
+            if (!changed)
+                setStatus(std::format("Order #{} has no planned parts to confirm", id.value));
+            else if (missing.empty())
+                setStatus(std::format("Order #{} confirmed: materials reserved", id.value));
+            else
+                setStatus(std::format("Order #{} confirmed, stockpiles lack {}", id.value, describeGoods(missing)));
+            break;
         }
-        if (deliver)
+        case HudAction::DeliverOrder:
         {
-            setStatus(m_construction.debugDeliver(id) ? std::format("Order #{}: materials delivered (debug)", id.value)
-                                                      : std::format("Order #{} awaits no materials (confirm it first)", id.value));
+            const bool delivered = m_construction.debugDeliver(id);
+            const GoodAmounts missing = m_construction.orderShortfall(id);
+            if (!delivered)
+                setStatus(std::format("Order #{}: nothing to deliver (confirm it, or stock up)", id.value));
+            else if (missing.empty())
+                setStatus(std::format("Order #{}: materials delivered (debug)", id.value));
+            else
+                setStatus(std::format("Order #{}: delivered what there is, still missing {}", id.value, describeGoods(missing)));
+            break;
         }
-        if (complete)
+        case HudAction::CompleteOrder:
         {
+            std::vector<Structure> parts;
+            for (const StructureId component : m_construction.order(id)->components)
+                parts.push_back(*m_construction.structure(component));
             const float wood = m_construction.debugCompleteOrder(*m_settlement, m_resourceState, id).value_or(0.0f);
             m_woodKg += wood;
-            setStatus(wood > 0.0f ? std::format("Order #{} built (debug), site cleared for {:.0f} kg wood", id.value, wood)
-                                  : std::format("Order #{} built (debug)", id.value));
+            const int roofs = roofRoomsAround(parts);
+            std::string status = std::format("Order #{} built (debug)", id.value);
+            if (const ConstructionOrder *left = m_construction.order(id))
+                status += std::format(", {} part(s) still await materials", left->components.size());
+            if (roofs > 0)
+                status += std::format(", {} roof(s) built", roofs);
+            if (wood > 0.0f)
+                status += std::format(", site cleared for {:.0f} kg wood", wood);
+            setStatus(std::move(status));
+            break;
         }
-        if (cancel)
-            setStatus(std::format("Order #{} cancelled: {} planned part(s) removed", id.value, m_construction.cancelOrder(id)));
+        case HudAction::CancelOrder:
+            setStatus(std::format("Order #{} cancelled: {} unfinished part(s) removed, goods returned", id.value,
+                                  m_construction.cancelOrder(id)));
+            break;
+        default:
+            break;
+        }
         if (!m_construction.order(id))
         {
             m_selectedOrder = {};
             m_extendOrder = false;
+        }
+    }
+
+    int Application::roofRoomsAround(const std::vector<Structure> &structures)
+    {
+        std::set<std::uint32_t> rooms;
+        for (const Structure &s : structures)
+        {
+            std::vector<LocalCoord> tiles;
+            if (s.kind == StructureKind::Floor)
+                tiles = {s.tile};
+            else if (s.kind == StructureKind::Furniture)
+                tiles = {cellTile(s.tile)};
+            else
+                tiles = {edgeTiles(s.edge())[0], edgeTiles(s.edge())[1]};
+            for (const LocalCoord tile : tiles)
+            {
+                if (const RoomId room = m_construction.rooms().roomAt(tile); room.isValid())
+                    rooms.insert(room.value);
+            }
+        }
+        int built = 0;
+        for (const std::uint32_t room : rooms)
+            built += m_construction.buildRoof(RoomId{room}) ? 1 : 0;
+        return built;
+    }
+
+    RoomId Application::selectedRoom() const
+    {
+        return m_localPinned ? m_construction.rooms().roomAt(*m_localPinned) : RoomId{};
+    }
+
+    StockpileId Application::selectedStockpile() const
+    {
+        return m_localPinned ? m_construction.stockpiles().stockpileAt(*m_localPinned) : StockpileId{};
+    }
+
+    void Application::toggleInstantBuild()
+    {
+        m_instantBuild = !m_instantBuild;
+        setStatus(m_instantBuild ? "Instant building (developer, free)" : "Blueprint planning");
+    }
+
+    void Application::cycleRoomOverlay()
+    {
+        const int count = static_cast<int>(RoomOverlay::Count);
+        m_roomOverlay = static_cast<RoomOverlay>((static_cast<int>(m_roomOverlay) + 1) % count);
+        setStatus(std::format("Room overlay: {}", toString(m_roomOverlay)));
+    }
+
+    void Application::applyHud(const std::vector<HudCommand> &commands)
+    {
+        const RoomId room = selectedRoom();
+        const Room *current = m_construction.rooms().room(room);
+        for (const HudCommand &c : commands)
+        {
+            switch (c.action)
+            {
+            case HudAction::SelectTool:
+                m_buildMode = true;
+                m_buildTool.selectTool(c.tool);
+                break;
+            case HudAction::SelectFurniture:
+                m_buildMode = true;
+                m_buildTool.selectFurniture(c.furniture);
+                break;
+            case HudAction::SelectMaterial:
+                m_buildTool.selectMaterial(c.material);
+                break;
+            case HudAction::Rotate:
+                m_buildTool.rotate();
+                break;
+            case HudAction::ToggleInstant:
+                toggleInstantBuild();
+                break;
+            case HudAction::CycleOverlay:
+                cycleRoomOverlay();
+                break;
+            case HudAction::LeaveBuildMode:
+                m_buildMode = false;
+                m_buildTool.cancelDrag();
+                break;
+            case HudAction::SetRoomFunction:
+                if (m_construction.setRoomFunction(room, c.function))
+                    setStatus(std::format("Room #{} is now a {}", room.value, toString(c.function)));
+                break;
+            case HudAction::SetRoofMode:
+                if (current)
+                    m_construction.setRoof(room, {c.roofMode, current->roof.material});
+                break;
+            case HudAction::SetRoofMaterial:
+                if (current)
+                    m_construction.setRoof(room, {current->roof.mode, c.material});
+                break;
+            case HudAction::BuildRoof:
+                setStatus(m_construction.buildRoof(room) ? std::format("Room #{}: roof built from the stockpiles", room.value)
+                                                         : "Not enough unreserved goods for this roof");
+                break;
+            case HudAction::CloseSelection:
+                m_localPinned.reset();
+                break;
+            case HudAction::ConfirmOrder:
+            case HudAction::DeliverOrder:
+            case HudAction::CompleteOrder:
+            case HudAction::CancelOrder:
+                orderAction(c.action);
+                break;
+            case HudAction::AddGoods:
+            {
+                GoodAmounts goods;
+                for (std::uint32_t &kg : goods.kg)
+                    kg = 500;
+                m_construction.debugAddGoods(selectedStockpile(), goods);
+                break;
+            }
+            case HudAction::RemoveStockpile:
+                if (m_construction.removeStockpile(selectedStockpile()))
+                    setStatus("Stockpile removed (its goods are lost)");
+                break;
+            }
         }
     }
 
@@ -713,6 +906,7 @@ namespace olam
             }
             if (m_showDebugOverlay)
                 drawLocalOverlay();
+            drawUi(*m_renderer, m_ui.draws());
             m_renderer->endFrame();
             return;
         }
@@ -827,6 +1021,7 @@ namespace olam
                                       "Tab/F1-F9 views  H shade  LMB pin tile",
                                       "G gather 1 kg / fell tree  Shift+G gather all  Y one year",
                                       "T roof mode  Shift+T roof material  O roofs / rooms overlay",
+                                      "HUD: build menu below, LMB a room or stockpile for its panel",
                                       "B build mode  M world map  ` overlay  Esc quit",
                                   });
         if (m_buildMode)
@@ -838,7 +1033,7 @@ namespace olam
                                           std::format("BUILD {}: {}{}{}", m_instantBuild ? "(instant)" : "(blueprint)",
                                                       toString(m_buildTool.tool()),
                                                       kind ? std::format(" ({})", toString(m_buildTool.material())) : "", flipped),
-                                          "1 wall  2 door  3 floor  4 remove  Q/E material  R flip door",
+                                          "1 wall  2 door  3 floor  4 remove  Q/E material  R flip door / turn",
                                           "LMB drag  RMB cancel  I instant (Shift clears trees)  Esc leave",
                                           "Ctrl+LMB select order  Enter confirm  V deliver  C complete  X cancel",
                                       });
@@ -852,7 +1047,7 @@ namespace olam
             lines.emplace_back();
             lines.push_back(m_status);
         }
-        drawTextPanel(*m_renderer, {4.0f, 4.0f}, lines);
+        drawTextPanel(*m_renderer, {4.0f, kHudTopBar + 4.0f}, lines);
 
         const Vec2 inspected = m_localPinned ? Vec2{static_cast<float>(m_localPinned->x) + 0.5f,
                                                     static_cast<float>(m_localPinned->y) + 0.5f}
@@ -860,7 +1055,7 @@ namespace olam
         const std::vector<std::string> inspector =
             describeLocalTile(map, inspected, m_localPinned.has_value(), &m_resourceState, &m_construction);
         const Vec2 size = measureTextPanel(inspector);
-        drawTextPanel(*m_renderer, {m_localCamera.viewportSize().x - size.x - 4.0f, 4.0f}, inspector);
+        drawTextPanel(*m_renderer, {m_localCamera.viewportSize().x - size.x - 4.0f, kHudTopBar + 4.0f}, inspector);
     }
 
 } // namespace olam

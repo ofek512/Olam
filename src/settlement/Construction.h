@@ -18,13 +18,15 @@ namespace olam
         Wall,
         Door,
         Floor,
+        // Phase 4B.4: a piece of furniture on the cell grid (see Furniture.h).
+        Furniture,
         Count,
     };
 
     std::string_view toString(StructureKind kind);
 
-    // Walls and doors sit on tile edges; floors cover whole tiles.
-    constexpr bool isEdgeStructure(StructureKind kind) { return kind != StructureKind::Floor; }
+    // Walls and doors sit on tile edges; floors cover whole tiles; furniture covers a block of cells.
+    constexpr bool isEdgeStructure(StructureKind kind) { return kind == StructureKind::Wall || kind == StructureKind::Door; }
 
     enum class StructureMaterial : std::uint8_t
     {
@@ -33,12 +35,14 @@ namespace olam
         RoughStone,
         PackedEarth,
         WoodPlank,
-        // Roofs only (Phase 4B.3).
+        // Roofs and bedding.
         Thatch,
         Count,
     };
 
     std::string_view toString(StructureMaterial material);
+
+    constexpr std::size_t kMaterialCount = static_cast<std::size_t>(StructureMaterial::Count);
 
     // Lifecycle of every structure: planned by the player, supplied, then built.
     enum class ConstructionStage : std::uint8_t
@@ -67,10 +71,11 @@ namespace olam
         std::uint16_t workRequired;
     };
 
-    // Materials `kind` can be built from, in catalogue order (the first is the default).
+    // Materials `kind` can be built from, in catalogue order (the first is the default). Furniture materials
+    // depend on the piece: see furnitureMaterials().
     std::span<const StructureMaterial> structureMaterials(StructureKind kind);
     bool isMaterialAllowed(StructureKind kind, StructureMaterial material);
-    // Asserts that the material is allowed.
+    // Walls, doors and floors; asserts that the material is allowed.
     const StructureProperties &structureProperties(StructureKind kind, StructureMaterial material);
 
     // Materials a room's roof can be made of (the first is the default). Roofs are inferred per room, not placed.
